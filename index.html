@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Veranstaltungskasse</title>
+  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Firebase -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
+  <!-- QR Scanner -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <!-- QR Code Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- SheetJS für Excel Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --bg: #0f0f14;
+      --surface: #1a1a24;
+      --surface2: #22222f;
+      --border: #2e2e40;
+      --accent: #e8c547;
+      --accent2: #5b8df6;
+      --danger: #f06565;
+      --success: #52c97a;
+      --text: #f0f0f5;
+      --text2: #8888a0;
+      --radius: 14px;
+      --mono: 'DM Mono', monospace;
+      --sans: 'DM Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .header-mode {
+      font-size: 12px;
+      color: var(--text2);
+      background: var(--surface2);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── NAV TABS ── */
+    .nav {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav::-webkit-scrollbar { display: none; }
+    .nav-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 12px 8px;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .nav-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .nav-btn .nav-icon { font-size: 18px; display: block; margin-bottom: 2px; }
+
+    /* ── SCREENS ── */
+    .screen { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }
+    .screen.active { display: block; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: 14px;
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 13px 20px;
+      border-radius: 10px;
+      border: none;
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      width: 100%;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #0f0f14; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-success { background: var(--success); color: #0f0f14; }
+    .btn-sm { padding: 8px 14px; font-size: 13px; width: auto; border-radius: 8px; }
+
+    /* ── AMOUNT CHIPS ── */
+    .amount-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .amount-chip {
+      padding: 12px 6px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .amount-chip.selected {
+      border-color: var(--accent);
+      background: rgba(232,197,71,0.12);
+      color: var(--accent);
+    }
+    .amount-chip:active { transform: scale(0.95); }
+
+    /* ── INPUT ── */
+    .input-group { margin-bottom: 14px; }
+    .input-label {
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 6px;
+      display: block;
+      font-family: var(--mono);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input:focus { border-color: var(--accent2); }
+
+    /* ── QR CODE DISPLAY ── */
+    .qr-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      background: white;
+      border-radius: var(--radius);
+      margin: 14px 0;
+    }
+    #qr-display canvas, #qr-display img { border-radius: 6px; }
+    .qr-info {
+      margin-top: 12px;
+      text-align: center;
+    }
+    .qr-tid {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    .qr-amount {
+      font-size: 22px;
+      font-weight: 700;
+      color: #111;
+    }
+
+    /* ── BALANCE DISPLAY ── */
+    .balance-display {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .balance-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--text2);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .balance-amount {
+      font-family: var(--mono);
+      font-size: 48px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: -1px;
+    }
+    .balance-amount.low { color: var(--danger); }
+    .balance-tid {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 6px;
+    }
+
+    /* ── PRODUCT GRID ── */
+    .product-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .product-btn {
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 10px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .product-btn:active { transform: scale(0.96); }
+    .product-btn.selected {
+      border-color: var(--accent2);
+      background: rgba(91,141,246,0.12);
+    }
+    .product-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .product-price {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text2);
+    }
+    .product-qty {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: var(--accent2);
+      color: white;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── ORDER SUMMARY ── */
+    .order-list { margin-bottom: 14px; }
+    .order-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .order-item:last-child { border-bottom: none; }
+    .order-item-name { color: var(--text); }
+    .order-item-detail {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .order-item-price {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text2);
+    }
+    .order-total {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0 4px;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .order-total-amount { font-family: var(--mono); color: var(--accent); }
+    .remove-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+    }
+
+    /* ── SCANNER ── */
+    #scanner-container {
+      width: 100%;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #000;
+      margin-bottom: 14px;
+    }
+    #scanner-container > div { border-radius: var(--radius); }
+
+    /* ── STATUS BADGE ── */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--mono);
+      letter-spacing: 1px;
+    }
+    .badge-success { background: rgba(82,201,122,0.15); color: var(--success); }
+    .badge-danger { background: rgba(240,101,101,0.15); color: var(--danger); }
+    .badge-info { background: rgba(91,141,246,0.15); color: var(--accent2); }
+
+    /* ── TRANSACTION LOG ── */
+    .tx-item {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .tx-item:last-child { border-bottom: none; }
+    .tx-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    .tx-tid {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+    }
+    .tx-time {
+      font-size: 11px;
+      color: var(--text2);
+      font-family: var(--mono);
+    }
+    .tx-detail { font-size: 13px; color: var(--text2); }
+    .tx-amount {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .tx-amount.debit { color: var(--danger); }
+    .tx-amount.credit { color: var(--success); }
+    .tx-amount.payout { color: var(--accent); }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 22px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 9999;
+      transition: transform 0.3s ease;
+      max-width: 320px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.error { border-color: var(--danger); color: var(--danger); }
+    .toast.info { border-color: var(--accent2); color: var(--accent2); }
+
+    /* ── PIN SCREEN ── */
+    .pin-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+    }
+    .pin-overlay.hidden { display: none; }
+    .pin-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 3px;
+      color: var(--text2);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .pin-subtitle {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 30px;
+      color: var(--text);
+    }
+    .pin-dots {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 30px;
+    }
+    .pin-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: transparent;
+      transition: all 0.15s;
+    }
+    .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+    .pin-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      width: 260px;
+    }
+    .pin-key {
+      padding: 18px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.1s;
+    }
+    .pin-key:active { transform: scale(0.93); background: var(--surface); }
+    .pin-key.del { font-size: 16px; }
+    .pin-error {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: 14px;
+      height: 18px;
+      font-family: var(--mono);
+    }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      display: flex;
+      align-items: flex-end;
+      padding: 20px;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .modal-actions .btn { flex: 1; }
+
+    /* ── STATS ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 4px;
+    }
+
+    /* ── FIREBASE CONFIG NOTICE ── */
+    .config-notice {
+      background: rgba(232,197,71,0.08);
+      border: 1px solid rgba(232,197,71,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+    .config-notice strong { color: var(--accent); }
+
+    .separator {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+    .flex-row {
+      display: flex;
+      gap: 10px;
+    }
+    .flex-row .btn { flex: 1; }
+
+    /* ── SCAN RESULT CARD ── */
+    .scan-result {
+      background: var(--surface2);
+      border: 1.5px solid var(--accent2);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- PIN OVERLAY -->
+<div class="pin-overlay" id="pinOverlay">
+  <div class="pin-title">Veranstaltungskasse</div>
+  <div class="pin-subtitle">🔐 Kassen-PIN eingeben</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="d0"></div>
+    <div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div>
+    <div class="pin-dot" id="d3"></div>
+  </div>
+  <div class="pin-pad">
+    <button class="pin-key" onclick="pinInput('1')">1</button>
+    <button class="pin-key" onclick="pinInput('2')">2</button>
+    <button class="pin-key" onclick="pinInput('3')">3</button>
+    <button class="pin-key" onclick="pinInput('4')">4</button>
+    <button class="pin-key" onclick="pinInput('5')">5</button>
+    <button class="pin-key" onclick="pinInput('6')">6</button>
+    <button class="pin-key" onclick="pinInput('7')">7</button>
+    <button class="pin-key" onclick="pinInput('8')">8</button>
+    <button class="pin-key" onclick="pinInput('9')">9</button>
+    <button class="pin-key del" onclick="pinDel()">⌫</button>
+    <button class="pin-key" onclick="pinInput('0')">0</button>
+    <button class="pin-key" onclick="switchToStand()">Stand</button>
+  </div>
+  <div class="pin-error" id="pinError"></div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">⚡ Kasse</div>
+  <div class="header-mode" id="headerMode">Wird geladen…</div>
+</div>
+
+<!-- NAV -->
+<div class="nav" id="mainNav" style="display:none">
+  <button class="nav-btn active" onclick="showScreen('kasse')" id="nav-kasse">
+    <span class="nav-icon">💰</span>Kasse
+  </button>
+  <button class="nav-btn" onclick="showScreen('stand')" id="nav-stand">
+    <span class="nav-icon">🛒</span>Stand
+  </button>
+  <button class="nav-btn" onclick="showScreen('log')" id="nav-log">
+    <span class="nav-icon">📋</span>Verlauf
+  </button>
+  <button class="nav-btn" onclick="showScreen('auswertung')" id="nav-auswertung">
+    <span class="nav-icon">📊</span>Auswertung
+  </button>
+</div>
+
+<!-- STAND NAV (nur Scan & Log) -->
+<div class="nav" id="standNav" style="display:none">
+  <button class="nav-btn active" onclick="showScreen('stand')" id="nav-stand2">
+    <span class="nav-icon">🛒</span>Stand
+  </button>
+  <button class="nav-btn" onclick="showScreen('log')" id="nav-log2">
+    <span class="nav-icon">📋</span>Verlauf
+  </button>
+</div>
+
+<!-- ═══════════ KASSE SCREEN ═══════════ -->
+<div class="screen active" id="screen-kasse">
+
+  <div class="config-notice" id="firebaseNotice">
+    <strong>⚙️ Firebase noch nicht verbunden.</strong><br>
+    Füge deine Firebase-Konfiguration unten im Code ein (Zeile ~700), damit mehrere Geräte synchronisiert sind. Bis dahin läuft alles lokal.
+  </div>
+
+  <div class="card">
+    <div class="card-title">Guthaben aufladen</div>
+    <div class="amount-grid">
+      <div class="amount-chip" onclick="selectAmount(5)">5€</div>
+      <div class="amount-chip" onclick="selectAmount(10)">10€</div>
+      <div class="amount-chip" onclick="selectAmount(20)">20€</div>
+      <div class="amount-chip" onclick="selectAmount(30)">30€</div>
+      <div class="amount-chip" onclick="selectAmount(40)">40€</div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Oder eigener Betrag (€)</label>
+      <input type="number" class="input" id="customAmount" placeholder="0.00" min="0" step="0.50" oninput="customAmountInput()" />
+    </div>
+    <button class="btn btn-primary" onclick="generateQR()">✦ QR-Code generieren</button>
+  </div>
+
+  <!-- QR Anzeige -->
+  <div class="card" id="qrCard" style="display:none">
+    <div class="card-title">QR-Code für Kunde</div>
+    <div class="qr-container">
+      <div id="qr-display"></div>
+      <div class="qr-info">
+        <div class="qr-tid" id="qr-tid-label">TX–</div>
+        <div class="qr-amount" id="qr-amount-label">0,00 €</div>
+      </div>
+    </div>
+    <div class="flex-row">
+      <button class="btn btn-secondary btn-sm" onclick="printQR()">🖨️ Drucken</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetQR()">✕ Neu</button>
+    </div>
+  </div>
+
+  <!-- Auszahlung -->
+  <div class="card">
+    <div class="card-title">Restguthaben auszahlen / Aufladen</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">QR-Code scannen um Guthaben zu prüfen, aufzuladen oder auszuzahlen.</p>
+    <button class="btn btn-secondary" onclick="startKasseScanner()">📷 QR-Code scannen</button>
+    <div id="kasse-scanner-wrap" style="display:none;margin-top:14px;">
+      <div id="kasse-scanner"></div>
+    </div>
+    <div id="kasseResult" style="display:none;" class="scan-result" style="margin-top:14px;"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════ STAND SCREEN ═══════════ -->
+<div class="screen" id="screen-stand">
+
+  <!-- Scan -->
+  <div class="card" id="standScanCard">
+    <div class="card-title">Kunden-QR scannen</div>
+    <button class="btn btn-primary" onclick="startStandScanner()" id="scanBtn">📷 QR-Code scannen</button>
+    <div id="stand-scanner-wrap" style="display:none;margin-top:14px;">
+      <div id="stand-scanner"></div>
+    </div>
+  </div>
+
+  <!-- Kundenguthaben nach Scan -->
+  <div id="standCustomer" style="display:none;">
+    <div class="card">
+      <div class="balance-display">
+        <div class="balance-label">Guthaben</div>
+        <div class="balance-amount" id="standBalance">0,00 €</div>
+        <div class="balance-tid" id="standTid"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Produkte auswählen</div>
+      <div class="product-grid" id="productGrid"></div>
+    </div>
+
+    <div class="card" id="orderCard" style="display:none;">
+      <div class="card-title">Bestellung</div>
+      <div class="order-list" id="orderList"></div>
+      <div class="order-total">
+        <span>Gesamt</span>
+        <span class="order-total-amount" id="orderTotal">0,00 €</span>
+      </div>
+      <div class="separator"></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--text2);margin-bottom:14px;">
+        <span>Verbleibendes Guthaben</span>
+        <span id="remainingBalance" style="font-family:var(--mono);">0,00 €</span>
+      </div>
+      <button class="btn btn-success" onclick="confirmOrder()" id="confirmBtn">✓ Buchen</button>
+      <button class="btn btn-secondary" style="margin-top:8px;" onclick="clearOrder()">✕ Abbrechen</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ LOG SCREEN ═══════════ -->
+<div class="screen" id="screen-log">
+  <div class="card">
+    <div class="card-title">Transaktionsverlauf</div>
+    <div id="txList">
+      <p style="color:var(--text2);font-size:14px;">Noch keine Transaktionen.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ AUSWERTUNG SCREEN ═══════════ -->
+<div class="screen" id="screen-auswertung">
+
+  <div class="card">
+    <div class="card-title">Tagesübersicht</div>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">0,00 €</div>
+        <div class="stat-label">Gesamtumsatz</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-tx">0</div>
+        <div class="stat-label">Transaktionen</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-loaded">0,00 €</div>
+        <div class="stat-label">Aufgeladen</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-payout">0,00 €</div>
+        <div class="stat-label">Ausgezahlt</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Verkaufte Produkte</div>
+    <div id="productStats">
+      <p style="color:var(--text2);font-size:14px;">Noch keine Daten.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Export</div>
+    <button class="btn btn-primary" onclick="exportExcel()" style="margin-bottom:10px;">📥 Excel exportieren</button>
+    <button class="btn btn-danger" onclick="confirmReset()">🗑️ Alle Daten löschen</button>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle"></div>
+    <div id="modalBody"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  🔥 FIREBASE KONFIGURATION
+//  Ersetze diesen Block mit deinen eigenen Firebase-Daten.
+//  Anleitung: siehe setup-anleitung.html
+// ═══════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+// ═══════════════════════════════════════════════════════════
+
+const PIN = "1972";
+const PRODUCTS = [
+  { id: "lk", name: "Leberkäsweckle", price: 3.50, emoji: "🥖" },
+  { id: "sa", name: "Saiten",         price: 3.00, emoji: "🌭" },
+  { id: "ku", name: "Kuchen",         price: 2.00, emoji: "🍰" },
+  { id: "sw", name: "Süßigkeiten",    price: 2.00, emoji: "🍬" },
+  { id: "wa", name: "Wasser",         price: 3.00, emoji: "💧" },
+  { id: "ap", name: "Apfelschorle",   price: 3.00, emoji: "🥤" },
+  { id: "ka", name: "Kaffee",         price: 2.00, emoji: "☕" },
+];
+const AMOUNTS = [5, 10, 20, 30, 40];
+
+// ── State ──
+let mode = ""; // "kasse" or "stand"
+let db = null;
+let firebaseOk = false;
+let selectedAmount = 0;
+let currentTid = null;
+let currentBalance = 0;
+let order = {}; // { productId: qty }
+let transactions = [];
+let scannerKasse = null;
+let scannerStand = null;
+let scannerRunning = false;
+
+// ── Firebase Init ──
+function initFirebase() {
+  if (!FIREBASE_CONFIG.apiKey) {
+    document.getElementById("firebaseNotice").style.display = "block";
+    loadLocal();
+    return;
+  }
+  try {
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database(app);
+    firebaseOk = true;
+    document.getElementById("firebaseNotice").style.display = "none";
+    listenTransactions();
+  } catch(e) {
+    console.error("Firebase Fehler:", e);
+    loadLocal();
+  }
+}
+
+function listenTransactions() {
+  if (!db) return;
+  db.ref("transactions").on("value", snap => {
+    const data = snap.val() || {};
+    transactions = Object.values(data).sort((a,b) => b.timestamp - a.timestamp);
+    renderLog();
+    renderStats();
+  });
+}
+
+// ── Local Storage fallback ──
+function loadLocal() {
+  const stored = localStorage.getItem("vk_transactions");
+  if (stored) {
+    transactions = JSON.parse(stored).sort((a,b) => b.timestamp - a.timestamp);
+    renderLog();
+    renderStats();
+  }
+}
+
+function saveLocal() {
+  localStorage.setItem("vk_transactions", JSON.stringify(transactions));
+}
+
+// ── PIN ──
+let pinBuffer = "";
+function pinInput(digit) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += digit;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(() => checkPin(), 150);
+  }
+}
+function pinDel() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updatePinDots();
+}
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById("d" + i).classList.toggle("filled", i < pinBuffer.length);
+  }
+}
+function checkPin() {
+  if (pinBuffer === PIN) {
+    mode = "kasse";
+    document.getElementById("pinOverlay").classList.add("hidden");
+    document.getElementById("mainNav").style.display = "flex";
+    document.getElementById("headerMode").textContent = "💰 Kasse";
+    showScreen("kasse");
+    initFirebase();
+  } else {
+    document.getElementById("pinError").textContent = "❌ Falscher PIN";
+    pinBuffer = "";
+    updatePinDots();
+    setTimeout(() => document.getElementById("pinError").textContent = "", 2000);
+  }
+}
+function switchToStand() {
+  mode = "stand";
+  document.getElementById("pinOverlay").classList.add("hidden");
+  document.getElementById("standNav").style.display = "flex";
+  document.getElementById("headerMode").textContent = "🛒 Stand";
+  showScreen("stand");
+  buildProductGrid();
+  initFirebase();
+}
+
+// ── Navigation ──
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("screen-" + name).classList.add("active");
+  const nb = document.getElementById("nav-" + name) || document.getElementById("nav-" + name + "2");
+  if (nb) nb.classList.add("active");
+  if (name === "auswertung") renderStats();
+}
+
+// ── Amount Selection ──
+function selectAmount(amt) {
+  selectedAmount = amt;
+  document.getElementById("customAmount").value = "";
+  document.querySelectorAll(".amount-chip").forEach((c, i) => {
+    c.classList.toggle("selected", AMOUNTS[i] === amt);
+  });
+}
+function customAmountInput() {
+  selectedAmount = parseFloat(document.getElementById("customAmount").value) || 0;
+  document.querySelectorAll(".amount-chip").forEach(c => c.classList.remove("selected"));
+}
+
+// ── QR Code Generation (Kasse) ──
+function generateQR() {
+  if (!selectedAmount || selectedAmount <= 0) {
+    showToast("Bitte Betrag auswählen", "error"); return;
+  }
+  const tid = "TX" + Date.now().toString(36).toUpperCase();
+  currentTid = tid;
+  const data = JSON.stringify({ tid, balance: selectedAmount });
+
+  // Firebase / Local speichern
+  const entry = {
+    tid, type: "load", amount: selectedAmount,
+    timestamp: Date.now(), dateStr: formatDate(Date.now()),
+    timeStr: formatTime(Date.now()), items: []
+  };
+  saveTransaction(entry);
+
+  // QR anzeigen
+  document.getElementById("qr-display").innerHTML = "";
+  new QRCode(document.getElementById("qr-display"), {
+    text: data, width: 220, height: 220,
+    colorDark: "#111111", colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.H
+  });
+  document.getElementById("qr-tid-label").textContent = tid;
+  document.getElementById("qr-amount-label").textContent = formatEuro(selectedAmount);
+  document.getElementById("qrCard").style.display = "block";
+  showToast("QR-Code erstellt: " + formatEuro(selectedAmount), "success");
+}
+
+function resetQR() {
+  document.getElementById("qrCard").style.display = "none";
+  document.getElementById("qr-display").innerHTML = "";
+  selectedAmount = 0;
+  document.querySelectorAll(".amount-chip").forEach(c => c.classList.remove("selected"));
+  document.getElementById("customAmount").value = "";
+}
+
+function printQR() {
+  const canvas = document.querySelector("#qr-display canvas");
+  if (!canvas) return;
+  const win = window.open("", "_blank");
+  win.document.write(`
+    <html><body style="text-align:center;font-family:monospace;padding:30px;">
+    <h2>Veranstaltungskasse</h2>
+    <p>${document.getElementById("qr-tid-label").textContent}</p>
+    <p style="font-size:28px;font-weight:bold;">${document.getElementById("qr-amount-label").textContent}</p>
+    <img src="${canvas.toDataURL()}" style="width:220px;height:220px;" />
+    <p style="font-size:12px;color:#666;margin-top:16px;">Bitte vorzeigen beim Kauf</p>
+    </body></html>`);
+  win.document.close();
+  win.print();
+}
+
+// ── Kasse Scanner (Auszahlung / Aufladung) ──
+function startKasseScanner() {
+  const wrap = document.getElementById("kasse-scanner-wrap");
+  if (scannerRunning) { stopScanner("kasse"); return; }
+  wrap.style.display = "block";
+  scannerKasse = new Html5Qrcode("kasse-scanner");
+  scannerKasse.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    (decoded) => { stopScanner("kasse"); handleKasseScan(decoded); },
+    () => {}
+  ).then(() => scannerRunning = true).catch(e => showToast("Kamera: " + e, "error"));
+}
+
+function handleKasseScan(raw) {
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
+  const { tid, balance } = parsed;
+  const res = document.getElementById("kasseResult");
+  res.style.display = "block";
+  res.innerHTML = `
+    <div style="margin-bottom:12px;">
+      <span class="badge badge-info">${tid}</span>
+      <span style="float:right;font-family:var(--mono);font-size:18px;color:var(--accent);">${formatEuro(balance)}</span>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Aktuelles Guthaben: <strong style="color:var(--text)">${formatEuro(balance)}</strong></p>
+    <div class="flex-row">
+      <button class="btn btn-success btn-sm" onclick="payoutBalance('${tid}',${balance})">💵 Auszahlen</button>
+      <button class="btn btn-secondary btn-sm" onclick="reloadBalance('${tid}',${balance})">➕ Aufladen</button>
+    </div>`;
+}
+
+function payoutBalance(tid, balance) {
+  if (balance <= 0) { showToast("Kein Guthaben vorhanden", "error"); return; }
+  const entry = {
+    tid, type: "payout", amount: balance,
+    timestamp: Date.now(), dateStr: formatDate(Date.now()),
+    timeStr: formatTime(Date.now()), items: []
+  };
+  saveTransaction(entry);
+  showToast("Ausgezahlt: " + formatEuro(balance), "success");
+  document.getElementById("kasseResult").style.display = "none";
+}
+
+function reloadBalance(tid, balance) {
+  openModal("Guthaben aufladen",
+    `<p style="color:var(--text2);margin-bottom:14px;">Aktuelles Guthaben: <strong style="color:var(--accent)">${formatEuro(balance)}</strong></p>
+     <div class="input-group"><label class="input-label">Betrag (€)</label>
+     <input type="number" class="input" id="reloadAmt" placeholder="0.00" min="1" step="0.50" /></div>`,
+    [{label: "Aufladen", cls: "btn-primary", fn: () => {
+      const add = parseFloat(document.getElementById("reloadAmt").value);
+      if (!add || add <= 0) { showToast("Betrag eingeben", "error"); return; }
+      const entry = {
+        tid, type: "load", amount: add,
+        timestamp: Date.now(), dateStr: formatDate(Date.now()),
+        timeStr: formatTime(Date.now()), items: []
+      };
+      saveTransaction(entry);
+      closeModal();
+      showToast("Aufgeladen: " + formatEuro(add), "success");
+      document.getElementById("kasseResult").style.display = "none";
+    }},
+    {label: "Abbrechen", cls: "btn-secondary", fn: closeModal}]
+  );
+}
+
+// ── Stand Scanner ──
+function startStandScanner() {
+  const btn = document.getElementById("scanBtn");
+  const wrap = document.getElementById("stand-scanner-wrap");
+  if (scannerRunning) { stopScanner("stand"); return; }
+  wrap.style.display = "block";
+  btn.textContent = "⏹ Scanner stoppen";
+  scannerStand = new Html5Qrcode("stand-scanner");
+  scannerStand.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    (decoded) => { stopScanner("stand"); handleStandScan(decoded); },
+    () => {}
+  ).then(() => scannerRunning = true).catch(e => showToast("Kamera: " + e, "error"));
+}
+
+function handleStandScan(raw) {
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
+  const { tid, balance } = parsed;
+
+  // Berechne aktuellen Kontostand aus allen Transaktionen
+  const currentBal = computeBalance(tid, balance);
+
+  currentTid = tid;
+  currentBalance = currentBal;
+  order = {};
+
+  const balEl = document.getElementById("standBalance");
+  balEl.textContent = formatEuro(currentBal);
+  balEl.className = "balance-amount" + (currentBal < 3 ? " low" : "");
+  document.getElementById("standTid").textContent = tid;
+  document.getElementById("standCustomer").style.display = "block";
+  document.getElementById("stand-scanner-wrap").style.display = "none";
+  document.getElementById("scanBtn").textContent = "📷 Neuen QR scannen";
+  renderOrder();
+  showToast("Kunde geladen: " + formatEuro(currentBal), "info");
+}
+
+function computeBalance(tid, initialBalance) {
+  // Berechne aus Transaktions-Log
+  let bal = initialBalance;
+  // Suche alle Buchungen für diese TID
+  const txForTid = transactions.filter(t => t.tid === tid && t.type !== "load");
+  // Die erste load-Transaktion ist bereits initialBalance
+  // Addiere spätere loads, subtrahiere purchases und payouts
+  const loadsAfter = transactions.filter(t => t.tid === tid && t.type === "load").slice(1);
+  loadsAfter.forEach(t => bal += t.amount);
+  txForTid.forEach(t => {
+    if (t.type === "purchase") bal -= t.amount;
+    if (t.type === "payout") bal -= t.amount;
+  });
+  return Math.max(0, bal);
+}
+
+// ── Product Grid ──
+function buildProductGrid() {
+  const grid = document.getElementById("productGrid");
+  grid.innerHTML = "";
+  PRODUCTS.forEach(p => {
+    const btn = document.createElement("div");
+    btn.className = "product-btn";
+    btn.id = "prod-" + p.id;
+    btn.innerHTML = `<div style="font-size:26px;margin-bottom:4px;">${p.emoji}</div>
+      <div class="product-name">${p.name}</div>
+      <div class="product-price">${formatEuro(p.price)}</div>`;
+    btn.onclick = () => addProduct(p.id);
+    grid.appendChild(btn);
+  });
+}
+
+function addProduct(pid) {
+  if (!currentTid) { showToast("Bitte zuerst QR scannen", "error"); return; }
+  order[pid] = (order[pid] || 0) + 1;
+  renderOrder();
+}
+
+function removeProduct(pid) {
+  if (order[pid]) {
+    order[pid]--;
+    if (order[pid] === 0) delete order[pid];
+    renderOrder();
+  }
+}
+
+function clearOrder() {
+  order = {};
+  currentTid = null;
+  currentBalance = 0;
+  document.getElementById("standCustomer").style.display = "none";
+  document.getElementById("orderCard").style.display = "none";
+}
+
+function renderOrder() {
+  // Update product grid badges
+  PRODUCTS.forEach(p => {
+    const btn = document.getElementById("prod-" + p.id);
+    if (!btn) return;
+    const existing = btn.querySelector(".product-qty");
+    if (existing) existing.remove();
+    if (order[p.id]) {
+      const badge = document.createElement("div");
+      badge.className = "product-qty";
+      badge.textContent = order[p.id];
+      btn.appendChild(badge);
+      btn.classList.add("selected");
+    } else {
+      btn.classList.remove("selected");
+    }
+  });
+
+  const items = Object.entries(order);
+  if (items.length === 0) {
+    document.getElementById("orderCard").style.display = "none";
+    return;
+  }
+  document.getElementById("orderCard").style.display = "block";
+
+  let total = 0;
+  const list = document.getElementById("orderList");
+  list.innerHTML = "";
+  items.forEach(([pid, qty]) => {
+    const p = PRODUCTS.find(x => x.id === pid);
+    const subtotal = p.price * qty;
+    total += subtotal;
+    const row = document.createElement("div");
+    row.className = "order-item";
+    row.innerHTML = `
+      <span class="order-item-name">${p.emoji} ${p.name} ×${qty}</span>
+      <div class="order-item-detail">
+        <span class="order-item-price">${formatEuro(subtotal)}</span>
+        <button class="remove-btn" onclick="removeProduct('${pid}')">−</button>
+      </div>`;
+    list.appendChild(row);
+  });
+  document.getElementById("orderTotal").textContent = formatEuro(total);
+
+  const remaining = currentBalance - total;
+  const remEl = document.getElementById("remainingBalance");
+  remEl.textContent = formatEuro(Math.max(0, remaining));
+  remEl.style.color = remaining < 0 ? "var(--danger)" : "var(--success)";
+
+  const confirmBtn = document.getElementById("confirmBtn");
+  if (remaining < 0) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "⚠ Guthaben nicht ausreichend";
+    confirmBtn.style.opacity = "0.5";
+  } else {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = "✓ Buchen";
+    confirmBtn.style.opacity = "1";
+  }
+}
+
+function confirmOrder() {
+  const items = Object.entries(order);
+  if (items.length === 0 || !currentTid) return;
+  let total = 0;
+  const itemList = items.map(([pid, qty]) => {
+    const p = PRODUCTS.find(x => x.id === pid);
+    total += p.price * qty;
+    return { id: pid, name: p.name, qty, price: p.price, subtotal: p.price * qty };
+  });
+
+  const entry = {
+    tid: currentTid, type: "purchase", amount: total,
+    timestamp: Date.now(), dateStr: formatDate(Date.now()),
+    timeStr: formatTime(Date.now()), items: itemList
+  };
+  saveTransaction(entry);
+  showToast("Gebucht: " + formatEuro(total), "success");
+  clearOrder();
+}
+
+// ── Transaction Storage ──
+function saveTransaction(entry) {
+  if (firebaseOk && db) {
+    db.ref("transactions/" + entry.timestamp + "_" + entry.tid).set(entry);
+  } else {
+    transactions.unshift(entry);
+    saveLocal();
+    renderLog();
+    renderStats();
+  }
+}
+
+// ── Render Log ──
+function renderLog() {
+  const container = document.getElementById("txList");
+  if (transactions.length === 0) {
+    container.innerHTML = '<p style="color:var(--text2);font-size:14px;">Noch keine Transaktionen.</p>';
+    return;
+  }
+  container.innerHTML = "";
+  transactions.slice(0, 100).forEach(tx => {
+    const div = document.createElement("div");
+    div.className = "tx-item";
+    let typeLabel = "", amtClass = "";
+    if (tx.type === "load") { typeLabel = "⬆ Aufgeladen"; amtClass = "credit"; }
+    else if (tx.type === "purchase") { typeLabel = "⬇ Kauf"; amtClass = "debit"; }
+    else if (tx.type === "payout") { typeLabel = "💵 Auszahlung"; amtClass = "payout"; }
+    const itemsStr = tx.items && tx.items.length ? tx.items.map(i => `${i.name}×${i.qty}`).join(", ") : "";
+    div.innerHTML = `
+      <div class="tx-header">
+        <span class="tx-tid">${tx.tid}</span>
+        <span class="tx-time">${tx.timeStr || ""}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span class="tx-detail">${typeLabel}</span>
+          ${itemsStr ? `<span style="font-size:11px;color:var(--text2);display:block;">${itemsStr}</span>` : ""}
+        </div>
+        <span class="tx-amount ${amtClass}">${tx.type === "purchase" ? "−" : "+"}${formatEuro(tx.amount)}</span>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+// ── Render Stats ──
+function renderStats() {
+  let totalRevenue = 0, totalLoaded = 0, totalPayout = 0, txCount = 0;
+  const productCounts = {};
+
+  transactions.forEach(tx => {
+    if (tx.type === "purchase") {
+      totalRevenue += tx.amount;
+      txCount++;
+      tx.items && tx.items.forEach(item => {
+        productCounts[item.name] = (productCounts[item.name] || { qty: 0, revenue: 0 });
+        productCounts[item.name].qty += item.qty;
+        productCounts[item.name].revenue += item.subtotal;
+      });
+    }
+    if (tx.type === "load") totalLoaded += tx.amount;
+    if (tx.type === "payout") totalPayout += tx.amount;
+  });
+
+  document.getElementById("stat-total").textContent = formatEuro(totalRevenue);
+  document.getElementById("stat-tx").textContent = txCount;
+  document.getElementById("stat-loaded").textContent = formatEuro(totalLoaded);
+  document.getElementById("stat-payout").textContent = formatEuro(totalPayout);
+
+  const ps = document.getElementById("productStats");
+  const entries = Object.entries(productCounts).sort((a,b) => b[1].qty - a[1].qty);
+  if (entries.length === 0) {
+    ps.innerHTML = '<p style="color:var(--text2);font-size:14px;">Noch keine Daten.</p>';
+    return;
+  }
+  ps.innerHTML = "";
+  entries.forEach(([name, data]) => {
+    const row = document.createElement("div");
+    row.className = "order-item";
+    row.innerHTML = `<span style="font-size:14px;">${name}</span>
+      <div style="display:flex;gap:16px;align-items:center;">
+        <span style="font-family:var(--mono);font-size:13px;color:var(--text2);">${data.qty}×</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--accent);">${formatEuro(data.revenue)}</span>
+      </div>`;
+    ps.appendChild(row);
+  });
+}
+
+// ── Excel Export ──
+function exportExcel() {
+  if (transactions.length === 0) { showToast("Keine Daten zum Exportieren", "error"); return; }
+  const rows = [];
+  rows.push(["Datum", "Uhrzeit", "Transaktions-ID", "Typ", "Betrag €", "Leberkäsweckle", "Saiten", "Kuchen", "Süßigkeiten", "Wasser", "Apfelschorle", "Kaffee"]);
+
+  transactions.forEach(tx => {
+    const getQty = (name) => {
+      if (!tx.items) return 0;
+      const item = tx.items.find(i => i.name === name);
+      return item ? item.qty : 0;
+    };
+    let typeDE = tx.type === "load" ? "Aufladung" : tx.type === "purchase" ? "Kauf" : "Auszahlung";
+    rows.push([
+      tx.dateStr, tx.timeStr, tx.tid, typeDE, tx.amount,
+      getQty("Leberkäsweckle"), getQty("Saiten"), getQty("Kuchen"),
+      getQty("Süßigkeiten"), getQty("Wasser"), getQty("Apfelschorle"), getQty("Kaffee")
+    ]);
+  });
+
+  // Summenzeile
+  rows.push([]);
+  const totals = ["", "", "", "GESAMT"];
+  let total = 0;
+  const productTotals = new Array(7).fill(0);
+  transactions.forEach(tx => {
+    if (tx.type === "purchase") {
+      total += tx.amount;
+      PRODUCTS.forEach((p, i) => {
+        const item = tx.items && tx.items.find(it => it.name === p.name);
+        if (item) productTotals[i] += item.qty;
+      });
+    }
+  });
+  totals.push(total);
+  productTotals.forEach(v => totals.push(v));
+  rows.push(totals);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [14,8,16,12,10,14,10,10,14,10,14,10].map(w => ({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Transaktionen");
+  XLSX.writeFile(wb, "Veranstaltungskasse_" + formatDate(Date.now()).replace(/\./g,"-") + ".xlsx");
+  showToast("Excel exportiert!", "success");
+}
+
+// ── Reset ──
+function confirmReset() {
+  openModal("⚠ Alle Daten löschen",
+    '<p style="color:var(--text2);">Dieser Vorgang kann nicht rückgängig gemacht werden. Wirklich alle Transaktionen löschen?</p>',
+    [{label: "Ja, löschen", cls: "btn-danger", fn: () => {
+      if (firebaseOk && db) { db.ref("transactions").remove(); }
+      transactions = [];
+      localStorage.removeItem("vk_transactions");
+      renderLog(); renderStats();
+      closeModal();
+      showToast("Alle Daten gelöscht", "info");
+    }},
+    {label: "Abbrechen", cls: "btn-secondary", fn: closeModal}]
+  );
+}
+
+// ── Scanner Helpers ──
+function stopScanner(which) {
+  scannerRunning = false;
+  if (which === "kasse" && scannerKasse) {
+    scannerKasse.stop().then(() => {
+      document.getElementById("kasse-scanner-wrap").style.display = "none";
+    }).catch(() => {});
+    scannerKasse = null;
+  }
+  if (which === "stand" && scannerStand) {
+    scannerStand.stop().catch(() => {});
+    scannerStand = null;
+    document.getElementById("stand-scanner-wrap").style.display = "none";
+    document.getElementById("scanBtn").textContent = "📷 QR-Code scannen";
+  }
+}
+
+// ── Modal ──
+function openModal(title, bodyHtml, actions) {
+  document.getElementById("modalTitle").textContent = title;
+  document.getElementById("modalBody").innerHTML = bodyHtml;
+  const actEl = document.getElementById("modalActions");
+  actEl.innerHTML = "";
+  actions.forEach(a => {
+    const btn = document.createElement("button");
+    btn.className = "btn " + a.cls;
+    btn.textContent = a.label;
+    btn.onclick = a.fn;
+    actEl.appendChild(btn);
+  });
+  document.getElementById("modalOverlay").classList.remove("hidden");
+}
+function closeModal() {
+  document.getElementById("modalOverlay").classList.add("hidden");
+}
+document.getElementById("modalOverlay").addEventListener("click", function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── Toast ──
+function showToast(msg, type = "info") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show " + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// ── Formatters ──
+function formatEuro(v) {
+  return v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString("de-DE");
+}
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Init ──
+window.onload = function() {
+  buildProductGrid();
+};
+</script>
+</body>
+</html>
