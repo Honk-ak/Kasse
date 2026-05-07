@@ -669,10 +669,6 @@
       <div class="amount-chip" onclick="selectAmount(30)">30€</div>
       <div class="amount-chip" onclick="selectAmount(40)">40€</div>
     </div>
-    <div class="input-group">
-      <label class="input-label">Oder eigener Betrag (€)</label>
-      <input type="number" class="input" id="customAmount" placeholder="0.00" min="0" step="0.50" oninput="customAmountInput()" />
-    </div>
     <button class="btn btn-primary" onclick="generateQR()">✦ QR-Code generieren</button>
   </div>
 
@@ -1037,17 +1033,20 @@ function handleKasseScan(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
   const { tid, balance } = parsed;
+  // Echtes Restguthaben aus Transaktionsverlauf berechnen
+  const realBalance = computeBalance(tid, balance);
   const res = document.getElementById("kasseResult");
   res.style.display = "block";
   res.innerHTML = `
     <div style="margin-bottom:12px;">
       <span class="badge badge-info">${tid}</span>
-      <span style="float:right;font-family:var(--mono);font-size:18px;color:var(--accent);">${formatEuro(balance)}</span>
+      <span style="float:right;font-family:var(--mono);font-size:18px;color:var(--accent);">${formatEuro(realBalance)}</span>
     </div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Aktuelles Guthaben: <strong style="color:var(--text)">${formatEuro(balance)}</strong></p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:6px;">Ursprüngliches Guthaben: <strong style="color:var(--text2)">${formatEuro(balance)}</strong></p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Aktuelles Restguthaben: <strong style="color:var(--accent)">${formatEuro(realBalance)}</strong></p>
     <div class="flex-row">
-      <button class="btn btn-success btn-sm" onclick="payoutBalance('${tid}',${balance})">💵 Auszahlen</button>
-      <button class="btn btn-secondary btn-sm" onclick="reloadBalance('${tid}',${balance})">➕ Aufladen</button>
+      <button class="btn btn-success btn-sm" onclick="payoutBalance('${tid}',${realBalance})">💵 Auszahlen</button>
+      <button class="btn btn-secondary btn-sm" onclick="reloadBalance('${tid}',${realBalance})">➕ Aufladen</button>
     </div>`;
 }
 
