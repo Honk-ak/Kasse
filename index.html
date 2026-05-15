@@ -306,6 +306,28 @@
       justify-content: center;
     }
 
+    .product-minus {
+      position: absolute;
+      bottom: -7px;
+      right: -7px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--surface);
+      background: var(--danger);
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      z-index: 3;
+    }
+    .product-minus:active { transform: scale(0.9); }
+
     /* ── ORDER SUMMARY ── */
     .order-list { margin-bottom: 14px; }
     .order-item {
@@ -663,11 +685,15 @@
   <div class="card">
     <div class="card-title">Guthaben aufladen</div>
     <div class="amount-grid">
-      <div class="amount-chip" onclick="selectAmount(5)">5€</div>
-      <div class="amount-chip" onclick="selectAmount(10)">10€</div>
-      <div class="amount-chip" onclick="selectAmount(20)">20€</div>
-      <div class="amount-chip" onclick="selectAmount(30)">30€</div>
-      <div class="amount-chip" onclick="selectAmount(40)">40€</div>
+      <div class="amount-chip" data-amt="5"  onclick="toggleAmount(5)">5€</div>
+      <div class="amount-chip" data-amt="10" onclick="toggleAmount(10)">10€</div>
+      <div class="amount-chip" data-amt="20" onclick="toggleAmount(20)">20€</div>
+      <div class="amount-chip" data-amt="30" onclick="toggleAmount(30)">30€</div>
+      <div class="amount-chip" data-amt="40" onclick="toggleAmount(40)">40€</div>
+    </div>
+    <div id="amountSummary" style="display:none;text-align:center;padding:10px 0 14px;">
+      <span style="font-family:var(--mono);font-size:13px;color:var(--text2);">Gesamt: </span>
+      <span style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);" id="amountTotal">0,00 €</span>
     </div>
     <button class="btn btn-primary" onclick="generateQR()">✦ QR-Code generieren</button>
   </div>
@@ -948,17 +974,30 @@ function showScreen(name) {
   if (name === "auswertung") renderStats();
 }
 
-// ── Amount Selection ──
-function selectAmount(amt) {
-  selectedAmount = amt;
-  document.getElementById("customAmount").value = "";
-  document.querySelectorAll(".amount-chip").forEach((c, i) => {
-    c.classList.toggle("selected", AMOUNTS[i] === amt);
+// ── Amount Selection (Multi-Select) ──
+let selectedAmounts = []; // Array der gewählten Beträge
+
+function toggleAmount(amt) {
+  const idx = selectedAmounts.indexOf(amt);
+  if (idx >= 0) {
+    selectedAmounts.splice(idx, 1); // abwählen
+  } else {
+    selectedAmounts.push(amt); // dazuwählen
+  }
+  // Chips einfärben
+  document.querySelectorAll(".amount-chip").forEach(c => {
+    const v = parseInt(c.getAttribute("data-amt"));
+    c.classList.toggle("selected", selectedAmounts.includes(v));
   });
-}
-function customAmountInput() {
-  selectedAmount = parseFloat(document.getElementById("customAmount").value) || 0;
-  document.querySelectorAll(".amount-chip").forEach(c => c.classList.remove("selected"));
+  // Summe berechnen und anzeigen
+  selectedAmount = selectedAmounts.reduce((a, b) => a + b, 0);
+  const summary = document.getElementById("amountSummary");
+  if (selectedAmount > 0) {
+    summary.style.display = "block";
+    document.getElementById("amountTotal").textContent = formatEuro(selectedAmount);
+  } else {
+    summary.style.display = "none";
+  }
 }
 
 // ── QR Code Generation (Kasse) ──
@@ -989,14 +1028,21 @@ function generateQR() {
   document.getElementById("qr-amount-label").textContent = formatEuro(selectedAmount);
   document.getElementById("qrCard").style.display = "block";
   showToast("QR-Code erstellt: " + formatEuro(selectedAmount), "success");
+  // Auswahl zurücksetzen
+  selectedAmounts = [];
+  selectedAmount = 0;
+  document.querySelectorAll(".amount-chip").forEach(c => c.classList.remove("selected"));
+  document.getElementById("amountSummary").style.display = "none";
 }
 
 function resetQR() {
   document.getElementById("qrCard").style.display = "none";
   document.getElementById("qr-display").innerHTML = "";
+  selectedAmounts = [];
   selectedAmount = 0;
   document.querySelectorAll(".amount-chip").forEach(c => c.classList.remove("selected"));
-  document.getElementById("customAmount").value = "";
+  const customAmount = document.getElementById("customAmount");
+  if (customAmount) customAmount.value = "";
 }
 
 function printQR() {
@@ -1182,13 +1228,29 @@ function renderOrder() {
   PRODUCTS.forEach(p => {
     const btn = document.getElementById("prod-" + p.id);
     if (!btn) return;
-    const existing = btn.querySelector(".product-qty");
-    if (existing) existing.remove();
+
+    const existingQty = btn.querySelector(".product-qty");
+    if (existingQty) existingQty.remove();
+
+    const existingMinus = btn.querySelector(".product-minus");
+    if (existingMinus) existingMinus.remove();
+
     if (order[p.id]) {
       const badge = document.createElement("div");
       badge.className = "product-qty";
       badge.textContent = order[p.id];
       btn.appendChild(badge);
+
+      const minus = document.createElement("button");
+      minus.type = "button";
+      minus.className = "product-minus";
+      minus.textContent = "−";
+      minus.onclick = (event) => {
+        event.stopPropagation();
+        removeProduct(p.id);
+      };
+      btn.appendChild(minus);
+
       btn.classList.add("selected");
     } else {
       btn.classList.remove("selected");
