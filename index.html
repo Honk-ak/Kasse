@@ -1340,19 +1340,17 @@ function handleStandScan(raw) {
 }
 
 function computeBalance(tid, initialBalance) {
-  // Berechne aus Transaktions-Log
-  let bal = initialBalance;
-  // Suche alle Buchungen für diese TID
-  const txForTid = transactions.filter(t => t.tid === tid && t.type !== "load");
-  // Die erste load-Transaktion ist bereits initialBalance
-  // Addiere spätere loads, subtrahiere purchases und payouts
-  const loadsAfter = transactions.filter(t => t.tid === tid && t.type === "load").slice(1);
-  loadsAfter.forEach(t => bal += t.amount);
-  txForTid.forEach(t => {
-    if (t.type === "purchase") bal -= t.amount;
-    if (t.type === "payout") bal -= t.amount;
-  });
-  return Math.max(0, bal);
+  // Der Verlauf enthält die ursprüngliche Aufladung bereits als Buchung.
+  // Alle Buchungen werden deshalb unabhängig von ihrer Sortierung summiert.
+  const txForTid = transactions.filter(t => t.tid === tid);
+  if (txForTid.length === 0) return Math.max(0, Number(initialBalance) || 0);
+  const balance = txForTid.reduce((sum, transaction) => {
+    const amount = Number(transaction.amount) || 0;
+    if (transaction.type === "load") return sum + amount;
+    if (transaction.type === "purchase" || transaction.type === "payout") return sum - amount;
+    return sum;
+  }, 0);
+  return Math.max(0, Math.round(balance * 100) / 100);
 }
 
 // ── Product Grid ──
