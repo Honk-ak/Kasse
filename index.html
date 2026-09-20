@@ -18,6 +18,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- SheetJS für Excel Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- ExcelJS erzeugt echte Excel-Tabellen mit Tabellenformat Mittel 16 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
@@ -611,6 +613,21 @@
       padding: 16px;
       margin-bottom: 14px;
     }
+    /* Kassenbestand und Abschluss */
+    .cash-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .cash-row { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px; }
+    .cash-row label { display:block; font-size:12px; color:var(--text2); margin-bottom:5px; }
+    .cash-row input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:9px; font-family:var(--mono); }
+    .cash-summary { display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding:12px; background:rgba(232,197,71,.08); border:1px solid rgba(232,197,71,.3); border-radius:10px; }
+    .cash-summary strong { color:var(--accent); font-family:var(--mono); }
+    .accounting-row { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .accounting-row:last-child { border-bottom:0; }
+    .accounting-row span:last-child { font-family:var(--mono); text-align:right; }
+    .accounting-row.emphasis { font-weight:700; font-size:15px; }
+    .status-box { margin-top:12px; padding:12px; border-radius:10px; font-size:13px; line-height:1.5; }
+    .status-ok { background:rgba(82,201,122,.1); border:1px solid rgba(82,201,122,.35); color:var(--success); }
+    .status-warn { background:rgba(232,197,71,.08); border:1px solid rgba(232,197,71,.3); color:var(--accent); }
+    @media (min-width:600px) { .cash-grid { grid-template-columns:repeat(4,1fr); } }
   </style>
 </head>
 <body>
@@ -680,6 +697,14 @@
   <div class="config-notice" id="firebaseNotice">
     <strong>⚙️ Firebase noch nicht verbunden.</strong><br>
     Füge deine Firebase-Konfiguration unten im Code ein (Zeile ~700), damit mehrere Geräte synchronisiert sind. Bis dahin läuft alles lokal.
+  </div>
+
+  <div class="card">
+    <div class="card-title">Kassenbestand / Wechselgeld</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Stückelungen für den Startbestand eintragen. Die Endzählung erfolgt beim Veranstaltungsabschluss.</p>
+    <div class="cash-grid" id="startCashGrid"></div>
+    <div class="cash-summary"><span>Startbestand Wechselgeld</span><strong id="startCashTotal">0,00 €</strong></div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="applyRecommendedCash()">Empfehlung 390 € übernehmen</button>
   </div>
 
   <div class="card">
@@ -816,6 +841,20 @@
   </div>
 
   <div class="card">
+    <div class="card-title">Kassenabrechnung</div>
+    <div id="cashAccounting"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Veranstaltungsabschluss</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Beim Abschluss werden offene QR-Guthaben festgehalten und der gezählte Endbestand nach Stückelungen erfasst.</p>
+    <div class="cash-grid" id="endCashGrid"></div>
+    <div class="cash-summary"><span>Gezählter Endbestand</span><strong id="endCashTotal">0,00 €</strong></div>
+    <button class="btn btn-danger" id="closeEventBtn" style="margin-top:12px;" onclick="confirmCloseEvent()">Veranstaltung abschließen</button>
+    <div id="eventCloseStatus"></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">Export</div>
     <button class="btn btn-primary" onclick="exportExcel()" style="margin-bottom:10px;">📥 Excel exportieren</button>
     <button class="btn btn-danger" onclick="confirmReset()">🗑️ Alle Daten löschen</button>
@@ -876,6 +915,128 @@ let transactions = [];
 let scannerKasse = null;
 let scannerStand = null;
 let scannerRunning = false;
+const CASH_DENOMINATIONS = [0.50, 1, 2, 5, 10, 20, 50, 100];
+let cashState = loadCashState();
+
+function defaultCashState() {
+  return { startCounts: {}, endCounts: {}, closedAt: null, closingOpenBalance: null };
+}
+
+function loadCashState() {
+  try {
+    const value = JSON.parse(localStorage.getItem("vk_cash_state") || "null");
+    return value && typeof value === "object" ? Object.assign(defaultCashState(), value) : defaultCashState();
+  } catch (_) { return defaultCashState(); }
+}
+
+function saveCashState() {
+  localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+  if (firebaseOk && db) db.ref("cashState").set(cashState);
+  renderCashManagement();
+}
+
+function denominationKey(value) { return String(value).replace(".", "_"); }
+
+function cashTotal(counts) {
+  return CASH_DENOMINATIONS.reduce((sum, denomination) => sum + denomination * (Number(counts[denominationKey(denomination)]) || 0), 0);
+}
+
+function buildCashGrid(containerId, kind) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const counts = kind === "start" ? cashState.startCounts : cashState.endCounts;
+  container.innerHTML = "";
+  CASH_DENOMINATIONS.forEach(denomination => {
+    const key = denominationKey(denomination);
+    const row = document.createElement("div");
+    row.className = "cash-row";
+    row.innerHTML = `<label>${formatEuro(denomination)} × Anzahl</label><input type="number" min="0" step="1" inputmode="numeric" value="${Number(counts[key]) || 0}" ${kind === "start" && cashState.closedAt ? "disabled" : ""}>`;
+    row.querySelector("input").addEventListener("input", event => {
+      counts[key] = Math.max(0, parseInt(event.target.value, 10) || 0);
+      localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+      renderCashTotals();
+    });
+    row.querySelector("input").addEventListener("change", () => {
+      if (firebaseOk && db) db.ref("cashState").set(cashState);
+    });
+    container.appendChild(row);
+  });
+}
+
+function renderCashTotals() {
+  const start = document.getElementById("startCashTotal");
+  const end = document.getElementById("endCashTotal");
+  if (start) start.textContent = formatEuro(cashTotal(cashState.startCounts));
+  if (end) end.textContent = formatEuro(cashTotal(cashState.endCounts));
+  renderCashAccounting();
+}
+
+function applyRecommendedCash() {
+  if (cashState.closedAt) return;
+  cashState.startCounts = { "0_5":20, "1":10, "2":10, "5":12, "10":15, "20":7, "50":0, "100":0 };
+  saveCashState();
+  showToast("Empfohlener Startbestand übernommen", "success");
+}
+
+function getAccounting() {
+  let loaded = 0, purchases = 0, payouts = 0;
+  const balances = {};
+  transactions.forEach(tx => {
+    const amount = Number(tx.amount) || 0;
+    if (!balances[tx.tid]) balances[tx.tid] = 0;
+    if (tx.type === "load") { loaded += amount; balances[tx.tid] += amount; }
+    if (tx.type === "purchase") { purchases += amount; balances[tx.tid] -= amount; }
+    if (tx.type === "payout") { payouts += amount; balances[tx.tid] -= amount; }
+  });
+  const openBalances = Object.entries(balances).filter(([, value]) => value > 0.004).map(([tid, value]) => ({ tid, balance: Math.round(value * 100) / 100 }));
+  const open = openBalances.reduce((sum, item) => sum + item.balance, 0);
+  const start = cashTotal(cashState.startCounts);
+  const counted = cashTotal(cashState.endCounts);
+  const expected = start + loaded - payouts;
+  return { start, loaded, purchases, payouts, open, openBalances, expected, counted, difference: counted - expected, qrNet: loaded - payouts, plausibilityDifference: loaded - payouts - purchases - open };
+}
+
+function renderCashAccounting() {
+  const container = document.getElementById("cashAccounting");
+  if (!container) return;
+  const a = getAccounting();
+  const line = (label, value, cls = "") => `<div class="accounting-row ${cls}"><span>${label}</span><span>${formatEuro(value)}</span></div>`;
+  container.innerHTML = line("Wechselgeld Start", a.start) + line("QR-Aufladungen", a.loaded) + line("Ausgezahltes Restguthaben", -a.payouts) + line("Soll-Kassenbestand", a.expected, "emphasis") + line("Gezählter Endbestand", a.counted) + line("Kassendifferenz", a.difference, "emphasis") + line("Warenumsatz", a.purchases) + line("Offenes Restguthaben", a.open) + `<div class="status-box ${Math.abs(a.plausibilityDifference) < 0.01 ? "status-ok" : "status-warn"}">Plausibilitätsprüfung: Aufladungen minus Auszahlungen ${formatEuro(a.qrNet)} = Warenumsatz plus offenes Restguthaben ${formatEuro(a.purchases + a.open)}${Math.abs(a.plausibilityDifference) < 0.01 ? " ✓" : " — Abweichung " + formatEuro(a.plausibilityDifference)}</div>`;
+}
+
+function renderCashManagement() {
+  buildCashGrid("startCashGrid", "start");
+  buildCashGrid("endCashGrid", "end");
+  renderCashTotals();
+  const status = document.getElementById("eventCloseStatus");
+  const button = document.getElementById("closeEventBtn");
+  if (status) status.innerHTML = cashState.closedAt ? `<div class="status-box status-ok">Abgeschlossen am ${formatDate(cashState.closedAt)} um ${formatTime(cashState.closedAt)}. Festgehaltenes offenes Restguthaben: ${formatEuro(cashState.closingOpenBalance || 0)}.</div>` : `<div class="status-box status-warn">Veranstaltung ist geöffnet.</div>`;
+  if (button) { button.disabled = !!cashState.closedAt; button.style.opacity = cashState.closedAt ? ".5" : "1"; }
+}
+
+function confirmCloseEvent() {
+  const a = getAccounting();
+  openModal("Veranstaltung abschließen", `<p style="color:var(--text2);line-height:1.6;">Gezählter Endbestand: <strong style="color:var(--text)">${formatEuro(a.counted)}</strong><br>Sollbestand: <strong style="color:var(--text)">${formatEuro(a.expected)}</strong><br>Offenes Restguthaben: <strong style="color:var(--accent)">${formatEuro(a.open)}</strong><br><br>Nach dem Abschluss sind keine Aufladungen oder Warenverkäufe mehr möglich.</p>`, [
+    { label:"Jetzt abschließen", cls:"btn-danger", fn:closeEvent },
+    { label:"Abbrechen", cls:"btn-secondary", fn:closeModal }
+  ]);
+}
+
+function closeEvent() {
+  const a = getAccounting();
+  cashState.closedAt = Date.now();
+  cashState.closingOpenBalance = a.open;
+  cashState.closingOpenBalances = a.openBalances;
+  saveCashState();
+  closeModal();
+  showToast("Veranstaltung abgeschlossen", "success");
+}
+
+function ensureEventOpen() {
+  if (!cashState.closedAt) return true;
+  showToast("Veranstaltung ist bereits abgeschlossen", "error");
+  return false;
+}
 
 // ── Firebase Init ──
 function initFirebase() {
@@ -890,6 +1051,12 @@ function initFirebase() {
     firebaseOk = true;
     document.getElementById("firebaseNotice").style.display = "none";
     listenTransactions();
+    db.ref("cashState").on("value", snap => {
+      if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
+      else db.ref("cashState").set(cashState);
+      localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+      renderCashManagement();
+    });
   } catch(e) {
     console.error("Firebase Fehler:", e);
     loadLocal();
@@ -1002,6 +1169,7 @@ function toggleAmount(amt) {
 
 // ── QR Code Generation (Kasse) ──
 function generateQR() {
+  if (!ensureEventOpen()) return;
   if (!selectedAmount || selectedAmount <= 0) {
     showToast("Bitte Betrag auswählen", "error"); return;
   }
@@ -1097,6 +1265,7 @@ function handleKasseScan(raw) {
 }
 
 function payoutBalance(tid, balance) {
+  if (!ensureEventOpen()) return;
   if (balance <= 0) { showToast("Kein Guthaben vorhanden", "error"); return; }
   const entry = {
     tid, type: "payout", amount: balance,
@@ -1109,6 +1278,7 @@ function payoutBalance(tid, balance) {
 }
 
 function reloadBalance(tid, balance) {
+  if (!ensureEventOpen()) return;
   openModal("Guthaben aufladen",
     `<p style="color:var(--text2);margin-bottom:14px;">Aktuelles Guthaben: <strong style="color:var(--accent)">${formatEuro(balance)}</strong></p>
      <div class="input-group"><label class="input-label">Betrag (€)</label>
@@ -1301,6 +1471,7 @@ function renderOrder() {
 }
 
 function confirmOrder() {
+  if (!ensureEventOpen()) return;
   const items = Object.entries(order);
   if (items.length === 0 || !currentTid) return;
   let total = 0;
@@ -1387,6 +1558,7 @@ function renderStats() {
   document.getElementById("stat-tx").textContent = txCount;
   document.getElementById("stat-loaded").textContent = formatEuro(totalLoaded);
   document.getElementById("stat-payout").textContent = formatEuro(totalPayout);
+  renderCashAccounting();
 
   const ps = document.getElementById("productStats");
   const entries = Object.entries(productCounts).sort((a,b) => b[1].qty - a[1].qty);
@@ -1408,7 +1580,75 @@ function renderStats() {
 }
 
 // ── Excel Export ──
-function exportExcel() {
+function addExcelTable(sheet, name, ref, columns, rows, widths) {
+  sheet.addTable({ name, ref, headerRow:true, totalsRow:false, style:{ theme:"TableStyleMedium16", showRowStripes:true }, columns:columns.map(name => ({ name })), rows });
+  widths.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
+  sheet.views = [{ state:"frozen", ySplit:2 }];
+  sheet.getRow(1).font = { bold:true, size:16, color:{ argb:"FF1F4E78" } };
+}
+
+async function exportExcel() {
+  if (!window.ExcelJS) { showToast("Excel-Modul konnte nicht geladen werden", "error"); return; }
+  if (transactions.length === 0 && cashTotal(cashState.startCounts) === 0) { showToast("Keine Daten zum Exportieren", "error"); return; }
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Veranstaltungskasse";
+    workbook.created = new Date();
+    const a = getAccounting();
+    const overview = workbook.addWorksheet("Übersicht");
+    overview.getCell("A1").value = "Kassenabrechnung";
+    addExcelTable(overview, "Kassenabrechnung", "A3", ["Kennzahl", "Betrag"], [
+      ["Wechselgeld Start", a.start], ["QR-Aufladungen gesamt", a.loaded], ["Ausgezahltes Restguthaben", -a.payouts], ["Soll-Kassenbestand", a.expected], ["Tatsächlich gezählter Bestand", a.counted], ["Kassendifferenz", a.difference], ["Warenumsatz", a.purchases], ["Offenes Restguthaben", a.open], ["QR-Netto", a.qrNet], ["Plausibilitätsdifferenz", a.plausibilityDifference]
+    ], [42, 18]);
+    overview.getColumn(2).numFmt = '#,##0.00 [$€-407]';
+    overview.getCell("D3").value = "Status"; overview.getCell("D3").font = { bold:true };
+    overview.getCell("D4").value = "Veranstaltungsabschluss";
+    overview.getCell("E4").value = cashState.closedAt ? `${formatDate(cashState.closedAt)} ${formatTime(cashState.closedAt)}` : "Noch nicht abgeschlossen";
+    overview.getCell("D5").value = "Plausibilitätsprüfung";
+    overview.getCell("E5").value = Math.abs(a.plausibilityDifference) < 0.01 ? "OK" : "Abweichung";
+    overview.getColumn(4).width = 27; overview.getColumn(5).width = 25;
+
+    const txSheet = workbook.addWorksheet("Transaktionen");
+    txSheet.getCell("A1").value = "Transaktionen";
+    const txRows = [...transactions].sort((x,y) => x.timestamp - y.timestamp).map(tx => [tx.dateStr || formatDate(tx.timestamp), tx.timeStr || formatTime(tx.timestamp), tx.tid, tx.type === "load" ? "Aufladung" : tx.type === "purchase" ? "Kauf" : "Auszahlung", Number(tx.amount) || 0, (tx.items || []).map(item => `${item.name} × ${item.qty}`).join(", ")]);
+    addExcelTable(txSheet, "Transaktionen", "A3", ["Datum", "Uhrzeit", "Transaktions-ID", "Typ", "Betrag", "Artikel"], txRows, [14,11,20,15,14,50]);
+    txSheet.getColumn(5).numFmt = '#,##0.00 [$€-407]';
+
+    const sales = workbook.addWorksheet("Verkäufe");
+    sales.getCell("A1").value = "Verkaufte Produkte";
+    const saleMap = {};
+    transactions.filter(tx => tx.type === "purchase").forEach(tx => (tx.items || []).forEach(item => {
+      if (!saleMap[item.name]) saleMap[item.name] = { qty:0, revenue:0 };
+      saleMap[item.name].qty += Number(item.qty) || 0;
+      saleMap[item.name].revenue += Number(item.subtotal) || 0;
+    }));
+    addExcelTable(sales, "Verkaeufe", "A3", ["Produkt", "Menge", "Umsatz"], Object.entries(saleMap).map(([name,data]) => [name, data.qty, data.revenue]), [28,12,16]);
+    sales.getColumn(3).numFmt = '#,##0.00 [$€-407]';
+
+    const qr = workbook.addWorksheet("QR-Guthaben");
+    qr.getCell("A1").value = "Offene QR-Guthaben";
+    addExcelTable(qr, "QRGuthaben", "A3", ["Transaktions-ID", "Restguthaben", "Status"], a.openBalances.map(item => [item.tid, item.balance, cashState.closedAt ? "Beim Abschluss offen" : "Aktuell offen"]), [22,18,24]);
+    qr.getColumn(2).numFmt = '#,##0.00 [$€-407]';
+
+    const cash = workbook.addWorksheet("Kassenbestand");
+    cash.getCell("A1").value = "Kassenbestand nach Stückelungen";
+    const cashRows = CASH_DENOMINATIONS.map(value => { const key = denominationKey(value); const s = Number(cashState.startCounts[key]) || 0; const e = Number(cashState.endCounts[key]) || 0; return [value, s, value*s, e, value*e]; });
+    addExcelTable(cash, "Kassenbestand", "A3", ["Stückelung", "Anzahl Start", "Betrag Start", "Anzahl Ende", "Betrag Ende"], cashRows, [16,16,17,16,17]);
+    cash.getColumn(1).numFmt = '#,##0.00 [$€-407]'; cash.getColumn(3).numFmt = '#,##0.00 [$€-407]'; cash.getColumn(5).numFmt = '#,##0.00 [$€-407]';
+
+    workbook.eachSheet(sheet => { sheet.pageSetup = { orientation:"landscape", fitToPage:true, fitToWidth:1, fitToHeight:0 }; });
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Veranstaltungskasse_${formatDate(Date.now()).replace(/\./g,"-")}.xlsx`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    showToast("Excel mit intelligenten Tabellen exportiert", "success");
+  } catch (error) { console.error(error); showToast("Excel-Export fehlgeschlagen", "error"); }
+}
+
+function exportExcelLegacy() {
   if (transactions.length === 0) { showToast("Keine Daten zum Exportieren", "error"); return; }
   const rows = [];
   rows.push(["Datum", "Uhrzeit", "Transaktions-ID", "Typ", "Betrag €", "Leberkäsweckle", "Saiten", "Kuchen", "Süßigkeiten", "Wasser", "Apfelschorle", "Kaffee"]);
@@ -1459,9 +1699,13 @@ function confirmReset() {
     '<p style="color:var(--text2);">Dieser Vorgang kann nicht rückgängig gemacht werden. Wirklich alle Transaktionen löschen?</p>',
     [{label: "Ja, löschen", cls: "btn-danger", fn: () => {
       if (firebaseOk && db) { db.ref("transactions").remove(); }
+      if (firebaseOk && db) { db.ref("cashState").remove(); }
       transactions = [];
       localStorage.removeItem("vk_transactions");
+      localStorage.removeItem("vk_cash_state");
+      cashState = defaultCashState();
       renderLog(); renderStats();
+      renderCashManagement();
       closeModal();
       showToast("Alle Daten gelöscht", "info");
     }},
@@ -1531,6 +1775,7 @@ function formatTime(ts) {
 // ── Init ──
 window.onload = function() {
   buildProductGrid();
+  renderCashManagement();
 };
 </script>
 </body>
