@@ -11,6 +11,7 @@
 
   <!-- Firebase -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
   <!-- QR Scanner -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
@@ -627,10 +628,29 @@
     .status-box { margin-top:12px; padding:12px; border-radius:10px; font-size:13px; line-height:1.5; }
     .status-ok { background:rgba(82,201,122,.1); border:1px solid rgba(82,201,122,.35); color:var(--success); }
     .status-warn { background:rgba(232,197,71,.08); border:1px solid rgba(232,197,71,.3); color:var(--accent); }
+    .auth-overlay { position:fixed; inset:0; z-index:700; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:24px; }
+    .auth-overlay.hidden { display:none; }
+    .auth-card { width:100%; max-width:420px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:26px; }
+    .auth-title { font-size:22px; font-weight:700; margin-bottom:8px; }
+    .auth-copy { color:var(--text2); font-size:13px; line-height:1.5; margin-bottom:20px; }
+    .connection-state { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .connection-state .btn { width:auto; padding:8px 12px; }
     @media (min-width:600px) { .cash-grid { grid-template-columns:repeat(4,1fr); } }
   </style>
 </head>
 <body>
+
+<!-- FIREBASE LOGIN -->
+<div class="auth-overlay" id="firebaseAuthOverlay">
+  <div class="auth-card">
+    <div class="auth-title">🔐 Geräteanmeldung</div>
+    <p class="auth-copy">Dieses Gerät benötigt einmalig das Bedienerkonto der Veranstaltungskasse. Die Anmeldung bleibt in diesem Browser gespeichert.</p>
+    <div class="input-group"><label class="input-label">E-Mail-Adresse</label><input type="email" class="input" id="firebaseEmail" autocomplete="username"></div>
+    <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
+    <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
+    <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
+  </div>
+</div>
 
 <!-- PIN OVERLAY -->
 <div class="pin-overlay" id="pinOverlay">
@@ -695,8 +715,7 @@
 <div class="screen active" id="screen-kasse">
 
   <div class="config-notice" id="firebaseNotice">
-    <strong>⚙️ Firebase noch nicht verbunden.</strong><br>
-    Füge deine Firebase-Konfiguration unten im Code ein (Zeile ~700), damit mehrere Geräte synchronisiert sind. Bis dahin läuft alles lokal.
+    <div class="connection-state"><span id="firebaseStatus"><strong>⏳ Firebase wird verbunden…</strong></span><button class="btn btn-secondary btn-sm" onclick="logoutFirebase()">Abmelden</button></div>
   </div>
 
   <div class="card">
@@ -881,13 +900,14 @@
 //  Anleitung: siehe setup-anleitung.html
 // ═══════════════════════════════════════════════════════════
 const FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  databaseURL: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyA5__bS0ZbF64HwIUGFcMi-bjhyBoL4cy0",
+  authDomain: "veranstaltungskasse.firebaseapp.com",
+  databaseURL: "https://veranstaltungskasse-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "veranstaltungskasse",
+  storageBucket: "veranstaltungskasse.firebasestorage.app",
+  messagingSenderId: "162534595671",
+  appId: "1:162534595671:web:82dc48c26728dfd5f21712",
+  measurementId: "G-ZQK9QNW0ZS"
 };
 // ═══════════════════════════════════════════════════════════
 
@@ -906,7 +926,11 @@ const AMOUNTS = [5, 10, 20, 30, 40];
 // ── State ──
 let mode = ""; // "kasse" or "stand"
 let db = null;
+let auth = null;
 let firebaseOk = false;
+let firebaseInitialized = false;
+let firebaseListenersStarted = false;
+let firebaseConnected = false;
 let selectedAmount = 0;
 let currentTid = null;
 let currentBalance = 0;
@@ -1022,14 +1046,18 @@ function confirmCloseEvent() {
   ]);
 }
 
-function closeEvent() {
+async function closeEvent() {
+  if (!ensureFirebaseReady()) return;
   const a = getAccounting();
   cashState.closedAt = Date.now();
   cashState.closingOpenBalance = a.open;
   cashState.closingOpenBalances = a.openBalances;
-  saveCashState();
-  closeModal();
-  showToast("Veranstaltung abgeschlossen", "success");
+  try {
+    await db.ref("cashState").set(cashState);
+    localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+    renderCashManagement(); closeModal();
+    showToast("Veranstaltung abgeschlossen", "success");
+  } catch (error) { showToast("Abschluss konnte nicht gespeichert werden", "error"); }
 }
 
 function ensureEventOpen() {
@@ -1040,27 +1068,78 @@ function ensureEventOpen() {
 
 // ── Firebase Init ──
 function initFirebase() {
-  if (!FIREBASE_CONFIG.apiKey) {
-    document.getElementById("firebaseNotice").style.display = "block";
-    loadLocal();
-    return;
-  }
+  if (firebaseInitialized) return;
   try {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database(app);
-    firebaseOk = true;
-    document.getElementById("firebaseNotice").style.display = "none";
-    listenTransactions();
-    db.ref("cashState").on("value", snap => {
-      if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
-      else db.ref("cashState").set(cashState);
-      localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
-      renderCashManagement();
+    auth = firebase.auth(app);
+    firebaseInitialized = true;
+    db.ref(".info/connected").on("value", snap => {
+      firebaseConnected = snap.val() === true;
+      updateFirebaseStatus();
+    });
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    auth.onAuthStateChanged(user => {
+      firebaseOk = !!user;
+      document.getElementById("firebaseAuthOverlay").classList.toggle("hidden", !!user);
+      if (user) startFirebaseListeners();
+      updateFirebaseStatus();
     });
   } catch(e) {
     console.error("Firebase Fehler:", e);
-    loadLocal();
+    document.getElementById("firebaseLoginError").textContent = "Firebase konnte nicht gestartet werden.";
   }
+}
+
+async function loginFirebase() {
+  const email = document.getElementById("firebaseEmail").value.trim();
+  const password = document.getElementById("firebasePassword").value;
+  const error = document.getElementById("firebaseLoginError");
+  const button = document.getElementById("firebaseLoginBtn");
+  if (!email || !password) { error.textContent = "Bitte E-Mail-Adresse und Passwort eingeben."; return; }
+  error.textContent = ""; button.disabled = true; button.textContent = "Anmeldung läuft…";
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    document.getElementById("firebasePassword").value = "";
+  } catch (e) {
+    console.error(e); error.textContent = "Anmeldung fehlgeschlagen. Bitte Zugangsdaten prüfen.";
+  } finally { button.disabled = false; button.textContent = "Anmelden"; }
+}
+
+async function logoutFirebase() {
+  if (!auth) return;
+  if (db) { db.ref("transactions").off(); db.ref("cashState").off(); }
+  await auth.signOut();
+  firebaseOk = false;
+  firebaseListenersStarted = false;
+  transactions = [];
+  renderLog(); renderStats();
+}
+
+function updateFirebaseStatus() {
+  const status = document.getElementById("firebaseStatus");
+  if (!status) return;
+  if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
+  else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
+  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert.";
+}
+
+function startFirebaseListeners() {
+  if (!db || firebaseListenersStarted) return;
+  firebaseListenersStarted = true;
+  listenTransactions();
+  db.ref("cashState").on("value", snap => {
+    if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
+    else db.ref("cashState").set(cashState);
+    localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+    renderCashManagement();
+  });
+}
+
+function ensureFirebaseReady() {
+  if (firebaseOk && firebaseConnected && db) return true;
+  showToast("Keine sichere Firebase-Verbindung", "error");
+  return false;
 }
 
 function listenTransactions() {
@@ -1071,6 +1150,65 @@ function listenTransactions() {
     renderLog();
     renderStats();
   });
+}
+
+async function getServerCardBalance(tid) {
+  if (!ensureFirebaseReady()) throw new Error("offline");
+  const snapshot = await db.ref("cards/" + tid).once("value");
+  const card = snapshot.val();
+  if (!card || typeof card.balanceCents !== "number") throw new Error("card-not-found");
+  return Math.max(0, card.balanceCents) / 100;
+}
+
+async function createFirebaseCard(tid, amountEuros) {
+  if (!ensureFirebaseReady()) throw new Error("offline");
+  const amountCents = Math.round(amountEuros * 100);
+  const timestamp = Date.now();
+  const txKey = db.ref("transactions").push().key;
+  let failure = "QR-Code konnte nicht angelegt werden";
+  const result = await db.ref().transaction(root => {
+    root = root || {};
+    root.cards = root.cards || {};
+    root.transactions = root.transactions || {};
+    if (root.cashState && root.cashState.closedAt) { failure = "Veranstaltung ist abgeschlossen"; return; }
+    if (root.cards[tid]) { failure = "QR-ID existiert bereits"; return; }
+    root.cards[tid] = { tid, initialCents:amountCents, balanceCents:amountCents, status:"active", createdAt:timestamp, updatedAt:timestamp };
+    root.transactions[txKey] = { tid, type:"load", amount:amountCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items:[], actorUid:auth.currentUser.uid };
+    return root;
+  });
+  if (!result.committed) throw new Error(failure);
+  return amountCents / 100;
+}
+
+async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
+  if (!ensureFirebaseReady()) throw new Error("offline");
+  const requestedCents = amountEuros == null ? null : Math.round(amountEuros * 100);
+  const timestamp = Date.now();
+  const txKey = db.ref("transactions").push().key;
+  let failure = "Buchung wurde abgelehnt";
+  let bookedCents = 0;
+  const result = await db.ref().transaction(root => {
+    root = root || {};
+    root.cards = root.cards || {};
+    root.transactions = root.transactions || {};
+    if (root.cashState && root.cashState.closedAt) { failure = "Veranstaltung ist abgeschlossen"; return; }
+    const card = root.cards[tid];
+    if (!card || typeof card.balanceCents !== "number") { failure = "QR-Code ist nicht in Firebase vorhanden"; return; }
+    if (type === "load") bookedCents = requestedCents;
+    else if (type === "purchase") bookedCents = requestedCents;
+    else if (type === "payout") bookedCents = card.balanceCents;
+    if (!Number.isInteger(bookedCents) || bookedCents <= 0) { failure = "Ungültiger Buchungsbetrag"; return; }
+    const nextBalance = type === "load" ? card.balanceCents + bookedCents : card.balanceCents - bookedCents;
+    if (nextBalance < 0) { failure = "Guthaben reicht nicht aus"; return; }
+    card.balanceCents = nextBalance;
+    card.updatedAt = timestamp;
+    card.status = nextBalance === 0 ? "empty" : "active";
+    root.cards[tid] = card;
+    root.transactions[txKey] = { tid, type, amount:bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
+    return root;
+  });
+  if (!result.committed) throw new Error(failure);
+  return { amount:bookedCents / 100, balance:result.snapshot.child("cards/" + tid + "/balanceCents").val() / 100 };
 }
 
 // ── Local Storage fallback ──
@@ -1168,8 +1306,9 @@ function toggleAmount(amt) {
 }
 
 // ── QR Code Generation (Kasse) ──
-function generateQR() {
+async function generateQR() {
   if (!ensureEventOpen()) return;
+  if (!ensureFirebaseReady()) return;
   if (!selectedAmount || selectedAmount <= 0) {
     showToast("Bitte Betrag auswählen", "error"); return;
   }
@@ -1177,13 +1316,11 @@ function generateQR() {
   currentTid = tid;
   const data = JSON.stringify({ tid, balance: selectedAmount });
 
-  // Firebase / Local speichern
-  const entry = {
-    tid, type: "load", amount: selectedAmount,
-    timestamp: Date.now(), dateStr: formatDate(Date.now()),
-    timeStr: formatTime(Date.now()), items: []
-  };
-  saveTransaction(entry);
+  try {
+    await createFirebaseCard(tid, selectedAmount);
+  } catch (error) {
+    console.error(error); showToast(error.message || "QR-Code konnte nicht erstellt werden", "error"); return;
+  }
 
   // QR anzeigen
   document.getElementById("qr-display").innerHTML = "";
@@ -1243,12 +1380,13 @@ function startKasseScanner() {
   ).then(() => scannerRunning = true).catch(e => showToast("Kamera: " + e, "error"));
 }
 
-function handleKasseScan(raw) {
+async function handleKasseScan(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
   const { tid, balance } = parsed;
-  // Echtes Restguthaben aus Transaktionsverlauf berechnen
-  const realBalance = computeBalance(tid, balance);
+  let realBalance;
+  try { realBalance = await getServerCardBalance(tid); }
+  catch (error) { showToast(error.message === "card-not-found" ? "QR-Code ist nicht in Firebase vorhanden" : "Guthaben konnte nicht geladen werden", "error"); return; }
   const res = document.getElementById("kasseResult");
   res.style.display = "block";
   res.innerHTML = `
@@ -1264,17 +1402,14 @@ function handleKasseScan(raw) {
     </div>`;
 }
 
-function payoutBalance(tid, balance) {
+async function payoutBalance(tid, balance) {
   if (!ensureEventOpen()) return;
   if (balance <= 0) { showToast("Kein Guthaben vorhanden", "error"); return; }
-  const entry = {
-    tid, type: "payout", amount: balance,
-    timestamp: Date.now(), dateStr: formatDate(Date.now()),
-    timeStr: formatTime(Date.now()), items: []
-  };
-  saveTransaction(entry);
-  showToast("Ausgezahlt: " + formatEuro(balance), "success");
-  document.getElementById("kasseResult").style.display = "none";
+  try {
+    const result = await commitFirebaseOperation(tid, "payout", null, []);
+    showToast("Ausgezahlt: " + formatEuro(result.amount), "success");
+    document.getElementById("kasseResult").style.display = "none";
+  } catch (error) { showToast(error.message || "Auszahlung fehlgeschlagen", "error"); }
 }
 
 function reloadBalance(tid, balance) {
@@ -1283,18 +1418,15 @@ function reloadBalance(tid, balance) {
     `<p style="color:var(--text2);margin-bottom:14px;">Aktuelles Guthaben: <strong style="color:var(--accent)">${formatEuro(balance)}</strong></p>
      <div class="input-group"><label class="input-label">Betrag (€)</label>
      <input type="number" class="input" id="reloadAmt" placeholder="0.00" min="1" step="0.50" /></div>`,
-    [{label: "Aufladen", cls: "btn-primary", fn: () => {
+    [{label: "Aufladen", cls: "btn-primary", fn: async () => {
       const add = parseFloat(document.getElementById("reloadAmt").value);
       if (!add || add <= 0) { showToast("Betrag eingeben", "error"); return; }
-      const entry = {
-        tid, type: "load", amount: add,
-        timestamp: Date.now(), dateStr: formatDate(Date.now()),
-        timeStr: formatTime(Date.now()), items: []
-      };
-      saveTransaction(entry);
-      closeModal();
-      showToast("Aufgeladen: " + formatEuro(add), "success");
-      document.getElementById("kasseResult").style.display = "none";
+      try {
+        const result = await commitFirebaseOperation(tid, "load", add, []);
+        closeModal();
+        showToast("Aufgeladen: " + formatEuro(add) + " · Neu: " + formatEuro(result.balance), "success");
+        document.getElementById("kasseResult").style.display = "none";
+      } catch (error) { showToast(error.message || "Aufladung fehlgeschlagen", "error"); }
     }},
     {label: "Abbrechen", cls: "btn-secondary", fn: closeModal}]
   );
@@ -1316,13 +1448,14 @@ function startStandScanner() {
   ).then(() => scannerRunning = true).catch(e => showToast("Kamera: " + e, "error"));
 }
 
-function handleStandScan(raw) {
+async function handleStandScan(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
   const { tid, balance } = parsed;
 
-  // Berechne aktuellen Kontostand aus allen Transaktionen
-  const currentBal = computeBalance(tid, balance);
+  let currentBal;
+  try { currentBal = await getServerCardBalance(tid); }
+  catch (error) { showToast(error.message === "card-not-found" ? "QR-Code ist nicht in Firebase vorhanden" : "Guthaben konnte nicht geladen werden", "error"); return; }
 
   currentTid = tid;
   currentBalance = currentBal;
@@ -1468,7 +1601,7 @@ function renderOrder() {
   }
 }
 
-function confirmOrder() {
+async function confirmOrder() {
   if (!ensureEventOpen()) return;
   const items = Object.entries(order);
   if (items.length === 0 || !currentTid) return;
@@ -1479,14 +1612,17 @@ function confirmOrder() {
     return { id: pid, name: p.name, qty, price: p.price, subtotal: p.price * qty };
   });
 
-  const entry = {
-    tid: currentTid, type: "purchase", amount: total,
-    timestamp: Date.now(), dateStr: formatDate(Date.now()),
-    timeStr: formatTime(Date.now()), items: itemList
-  };
-  saveTransaction(entry);
-  showToast("Gebucht: " + formatEuro(total), "success");
-  clearOrder();
+  const tid = currentTid;
+  const button = document.getElementById("confirmBtn");
+  button.disabled = true; button.textContent = "Buchung läuft…";
+  try {
+    const result = await commitFirebaseOperation(tid, "purchase", total, itemList);
+    showToast("Gebucht: " + formatEuro(total) + " · Rest: " + formatEuro(result.balance), "success");
+    clearOrder();
+  } catch (error) {
+    showToast(error.message || "Buchung fehlgeschlagen", "error");
+    try { currentBalance = await getServerCardBalance(tid); renderOrder(); } catch (_) {}
+  } finally { if (currentTid) { button.disabled = false; button.textContent = "✓ Buchen"; } }
 }
 
 // ── Transaction Storage ──
@@ -1695,9 +1831,9 @@ function exportExcelLegacy() {
 function confirmReset() {
   openModal("⚠ Alle Daten löschen",
     '<p style="color:var(--text2);">Dieser Vorgang kann nicht rückgängig gemacht werden. Wirklich alle Transaktionen löschen?</p>',
-    [{label: "Ja, löschen", cls: "btn-danger", fn: () => {
-      if (firebaseOk && db) { db.ref("transactions").remove(); }
-      if (firebaseOk && db) { db.ref("cashState").remove(); }
+    [{label: "Ja, löschen", cls: "btn-danger", fn: async () => {
+      if (!ensureFirebaseReady()) return;
+      await db.ref().update({ transactions:null, cards:null, cashState:null });
       transactions = [];
       localStorage.removeItem("vk_transactions");
       localStorage.removeItem("vk_cash_state");
@@ -1774,6 +1910,7 @@ function formatTime(ts) {
 window.onload = function() {
   buildProductGrid();
   renderCashManagement();
+  initFirebase();
 };
 </script>
 </body>
