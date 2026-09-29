@@ -931,6 +931,7 @@ let firebaseOk = false;
 let firebaseInitialized = false;
 let firebaseListenersStarted = false;
 let firebaseConnected = false;
+let authReadyPromise = Promise.resolve();
 let selectedAmount = 0;
 let currentTid = null;
 let currentBalance = 0;
@@ -1078,7 +1079,7 @@ function initFirebase() {
       firebaseConnected = snap.val() === true;
       updateFirebaseStatus();
     });
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    authReadyPromise = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     auth.onAuthStateChanged(user => {
       firebaseOk = !!user;
       document.getElementById("firebaseAuthOverlay").classList.toggle("hidden", !!user);
@@ -1099,10 +1100,25 @@ async function loginFirebase() {
   if (!email || !password) { error.textContent = "Bitte E-Mail-Adresse und Passwort eingeben."; return; }
   error.textContent = ""; button.disabled = true; button.textContent = "Anmeldung läuft…";
   try {
+    await authReadyPromise;
     await auth.signInWithEmailAndPassword(email, password);
     document.getElementById("firebasePassword").value = "";
   } catch (e) {
-    console.error(e); error.textContent = "Anmeldung fehlgeschlagen. Bitte Zugangsdaten prüfen.";
+    console.error(e);
+    const messages = {
+      "auth/invalid-credential": "E-Mail-Adresse oder Passwort wird von Firebase nicht akzeptiert.",
+      "auth/invalid-login-credentials": "E-Mail-Adresse oder Passwort wird von Firebase nicht akzeptiert.",
+      "auth/user-not-found": "Dieses Bedienerkonto existiert im Firebase-Projekt nicht.",
+      "auth/wrong-password": "Das Passwort wird von Firebase nicht akzeptiert.",
+      "auth/unauthorized-domain": "Die GitHub-Domain ist in Firebase noch nicht autorisiert.",
+      "auth/operation-not-allowed": "Die Anmeldung mit E-Mail und Passwort ist in Firebase nicht aktiviert.",
+      "auth/invalid-api-key": "Der Firebase-API-Schlüssel in der App ist ungültig.",
+      "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "Der Firebase-API-Schlüssel in der App ist ungültig.",
+      "auth/network-request-failed": "Firebase ist über das Netzwerk nicht erreichbar.",
+      "auth/too-many-requests": "Zu viele Anmeldeversuche. Bitte kurz warten und erneut versuchen.",
+      "auth/user-disabled": "Dieses Bedienerkonto wurde in Firebase deaktiviert."
+    };
+    error.textContent = (messages[e.code] || "Firebase-Anmeldung fehlgeschlagen.") + " (" + (e.code || "unbekannter Fehler") + ")";
   } finally { button.disabled = false; button.textContent = "Anmelden"; }
 }
 
