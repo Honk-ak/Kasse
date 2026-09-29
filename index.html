@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29h</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29i</div>
   </div>
 </div>
 
@@ -1138,7 +1138,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-29h";
+  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-29i";
 }
 
 function startFirebaseListeners() {
@@ -1201,6 +1201,49 @@ async function firebaseRestRead(path) {
   return response.json();
 }
 
+async function firebaseRestCardTransaction(tid, type, requestedCents, txKey, timestamp, items) {
+  if (!auth || !auth.currentUser) throw new Error("offline");
+  const safeTid = encodeURIComponent(tid);
+  const baseUrl = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "");
+  let failure = "Buchung wurde abgelehnt";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const token = await auth.currentUser.getIdToken(attempt > 0);
+    const url = baseUrl + "/cards/" + safeTid + ".json?auth=" + encodeURIComponent(token) + "&_=" + Date.now();
+    const readResponse = await fetch(url, {
+      cache:"no-store",
+      headers:{ "Accept":"application/json", "X-Firebase-ETag":"true" }
+    });
+    if (!readResponse.ok) throw new Error("Firebase-Serverfehler " + readResponse.status);
+    const etag = readResponse.headers.get("ETag");
+    const card = await readResponse.json();
+    if (!card || typeof card.balanceCents !== "number") throw new Error("QR-Code ist nicht in Firebase vorhanden");
+
+    let bookedCents = 0;
+    if (type === "load") bookedCents = requestedCents;
+    else if (type === "purchase") bookedCents = requestedCents;
+    else if (type === "payout") bookedCents = card.balanceCents;
+    if (!Number.isInteger(bookedCents) || bookedCents <= 0) throw new Error("Ungültiger Buchungsbetrag");
+    const nextBalance = type === "load" ? card.balanceCents + bookedCents : card.balanceCents - bookedCents;
+    if (nextBalance < 0) throw new Error("Guthaben reicht nicht aus");
+
+    card.balanceCents = nextBalance;
+    card.updatedAt = timestamp;
+    card.status = nextBalance === 0 ? "empty" : "active";
+    card.audit = card.audit || {};
+    card.audit[txKey] = { type, amount:bookedCents / 100, timestamp, actorUid:auth.currentUser.uid };
+
+    const writeResponse = await fetch(url, {
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", "Accept":"application/json", "If-Match":etag || "*" },
+      body:JSON.stringify(card)
+    });
+    if (writeResponse.status === 412) { failure = "Guthaben wurde gleichzeitig geändert"; continue; }
+    if (!writeResponse.ok) throw new Error("Firebase-Serverfehler " + writeResponse.status);
+    return { bookedCents, balanceCents:nextBalance };
+  }
+  throw new Error(failure + ". Bitte QR-Code erneut scannen.");
+}
+
 async function createFirebaseCard(tid, amountEuros) {
   if (!ensureFirebaseReady()) throw new Error("offline");
   const amountCents = Math.round(amountEuros * 100);
@@ -1237,34 +1280,14 @@ async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
   const requestedCents = amountEuros == null ? null : Math.round(amountEuros * 100);
   const timestamp = Date.now();
   const txKey = db.ref("transactions").push().key;
-  let failure = "Buchung wurde abgelehnt";
-  let bookedCents = 0;
-  const cardRef = db.ref("cards/" + normalizedTid);
-  const initialSnapshot = await cardRef.once("value");
-  if (!initialSnapshot.exists()) throw new Error("QR-Code ist nicht in Firebase vorhanden");
-  const result = await cardRef.transaction(card => {
-    if (!card || typeof card.balanceCents !== "number") { failure = "QR-Code ist nicht in Firebase vorhanden"; return; }
-    if (type === "load") bookedCents = requestedCents;
-    else if (type === "purchase") bookedCents = requestedCents;
-    else if (type === "payout") bookedCents = card.balanceCents;
-    if (!Number.isInteger(bookedCents) || bookedCents <= 0) { failure = "Ungültiger Buchungsbetrag"; return; }
-    const nextBalance = type === "load" ? card.balanceCents + bookedCents : card.balanceCents - bookedCents;
-    if (nextBalance < 0) { failure = "Guthaben reicht nicht aus"; return; }
-    card.balanceCents = nextBalance;
-    card.updatedAt = timestamp;
-    card.status = nextBalance === 0 ? "empty" : "active";
-    card.audit = card.audit || {};
-    card.audit[txKey] = { type, amount:bookedCents / 100, timestamp, actorUid:auth.currentUser.uid };
-    return card;
-  });
-  if (!result.committed) throw new Error(failure);
-  const transactionEntry = { tid:normalizedTid, type, amount:bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
+  const result = await firebaseRestCardTransaction(normalizedTid, type, requestedCents, txKey, timestamp, items);
+  const transactionEntry = { tid:normalizedTid, type, amount:result.bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
   try {
     await db.ref("transactions/" + txKey).set(transactionEntry);
   } catch (logError) {
     console.error("Verlauf konnte nicht separat gespeichert werden:", logError);
   }
-  return { amount:bookedCents / 100, balance:result.snapshot.child("balanceCents").val() / 100 };
+  return { amount:result.bookedCents / 100, balance:result.balanceCents / 100 };
 }
 
 // ── Local Storage fallback ──
