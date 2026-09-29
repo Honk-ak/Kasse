@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29d</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29e</div>
   </div>
 </div>
 
@@ -1182,19 +1182,23 @@ async function createFirebaseCard(tid, amountEuros) {
   const amountCents = Math.round(amountEuros * 100);
   const timestamp = Date.now();
   const txKey = db.ref("transactions").push().key;
-  let failure = "QR-Code konnte nicht angelegt werden";
-  const result = await db.ref().transaction(root => {
-    root = root || {};
-    root.cards = root.cards || {};
-    root.transactions = root.transactions || {};
-    if (root.cashState && root.cashState.closedAt) { failure = "Veranstaltung ist abgeschlossen"; return; }
-    if (root.cards[tid]) { failure = "QR-ID existiert bereits"; return; }
-    root.cards[tid] = { tid, initialCents:amountCents, balanceCents:amountCents, status:"active", createdAt:timestamp, updatedAt:timestamp };
-    root.transactions[txKey] = { tid, type:"load", amount:amountCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items:[], actorUid:auth.currentUser.uid };
-    return root;
-  });
-  if (!result.committed) throw new Error(failure);
+  const closedSnapshot = await db.ref("cashState/closedAt").once("value");
+  if (closedSnapshot.exists() && closedSnapshot.val()) throw new Error("Veranstaltung ist abgeschlossen");
+  const card = { tid, initialCents:amountCents, balanceCents:amountCents, status:"active", createdAt:timestamp, updatedAt:timestamp };
+  const transaction = { tid, type:"load", amount:amountCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items:[], actorUid:auth.currentUser.uid };
+  const updates = {};
+  updates["cards/" + tid] = card;
+  updates["transactions/" + txKey] = transaction;
+  await db.ref().update(updates);
   return amountCents / 100;
+}
+
+function firebaseErrorText(error, fallback) {
+  const code = error && error.code ? String(error.code) : "";
+  if (code === "PERMISSION_DENIED" || code === "permission-denied") return "Firebase verweigert das Speichern. Bitte Datenbankregeln prüfen.";
+  if (code === "NETWORK_ERROR" || code === "auth/network-request-failed") return "Keine Verbindung zu Firebase.";
+  const message = error && error.message ? String(error.message) : "";
+  return message && message.toLowerCase() !== "set" ? message : fallback;
 }
 
 async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
@@ -1329,14 +1333,15 @@ async function generateQR() {
   if (!selectedAmount || selectedAmount <= 0) {
     showToast("Bitte Betrag auswählen", "error"); return;
   }
-  const tid = "TX" + Date.now().toString(36).toUpperCase();
+  const randomPart = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const tid = "TX" + Date.now().toString(36).toUpperCase() + randomPart;
   currentTid = tid;
   const data = JSON.stringify({ tid, balance: selectedAmount });
 
   try {
     await createFirebaseCard(tid, selectedAmount);
   } catch (error) {
-    console.error(error); showToast(error.message || "QR-Code konnte nicht erstellt werden", "error"); return;
+    console.error(error); showToast(firebaseErrorText(error, "QR-Code konnte nicht in Firebase gespeichert werden"), "error"); return;
   }
 
   // QR anzeigen
