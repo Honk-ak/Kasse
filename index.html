@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29e</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29f</div>
   </div>
 </div>
 
@@ -1171,10 +1171,16 @@ function listenTransactions() {
 
 async function getServerCardBalance(tid) {
   if (!ensureFirebaseReady()) throw new Error("offline");
-  const snapshot = await db.ref("cards/" + tid).once("value");
-  const card = snapshot.val();
-  if (!card || typeof card.balanceCents !== "number") throw new Error("card-not-found");
-  return Math.max(0, card.balanceCents) / 100;
+  const normalizedTid = String(tid || "").trim();
+  if (!normalizedTid) throw new Error("card-not-found");
+  const delays = [0, 400, 1000];
+  for (const delay of delays) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    const snapshot = await db.ref("cards/" + normalizedTid).once("value");
+    const card = snapshot.val();
+    if (card && typeof card.balanceCents === "number") return Math.max(0, card.balanceCents) / 100;
+  }
+  throw new Error("card-not-found");
 }
 
 async function createFirebaseCard(tid, amountEuros) {
@@ -1190,6 +1196,11 @@ async function createFirebaseCard(tid, amountEuros) {
   updates["cards/" + tid] = card;
   updates["transactions/" + txKey] = transaction;
   await db.ref().update(updates);
+  const verification = await db.ref("cards/" + tid).once("value");
+  const storedCard = verification.val();
+  if (!storedCard || storedCard.tid !== tid || storedCard.balanceCents !== amountCents) {
+    throw new Error("Firebase hat den neuen QR-Code nicht bestätigt");
+  }
   return amountCents / 100;
 }
 
