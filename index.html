@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29g</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29h</div>
   </div>
 </div>
 
@@ -1138,7 +1138,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-29g";
+  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-29h";
 }
 
 function startFirebaseListeners() {
@@ -1231,17 +1231,18 @@ function firebaseErrorText(error, fallback) {
 
 async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
   if (!ensureFirebaseReady()) throw new Error("offline");
+  const normalizedTid = String(tid || "").trim();
+  const closedAt = await firebaseRestRead("cashState/closedAt");
+  if (closedAt) throw new Error("Veranstaltung ist abgeschlossen");
   const requestedCents = amountEuros == null ? null : Math.round(amountEuros * 100);
   const timestamp = Date.now();
   const txKey = db.ref("transactions").push().key;
   let failure = "Buchung wurde abgelehnt";
   let bookedCents = 0;
-  const result = await db.ref().transaction(root => {
-    root = root || {};
-    root.cards = root.cards || {};
-    root.transactions = root.transactions || {};
-    if (root.cashState && root.cashState.closedAt) { failure = "Veranstaltung ist abgeschlossen"; return; }
-    const card = root.cards[tid];
+  const cardRef = db.ref("cards/" + normalizedTid);
+  const initialSnapshot = await cardRef.once("value");
+  if (!initialSnapshot.exists()) throw new Error("QR-Code ist nicht in Firebase vorhanden");
+  const result = await cardRef.transaction(card => {
     if (!card || typeof card.balanceCents !== "number") { failure = "QR-Code ist nicht in Firebase vorhanden"; return; }
     if (type === "load") bookedCents = requestedCents;
     else if (type === "purchase") bookedCents = requestedCents;
@@ -1252,12 +1253,18 @@ async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
     card.balanceCents = nextBalance;
     card.updatedAt = timestamp;
     card.status = nextBalance === 0 ? "empty" : "active";
-    root.cards[tid] = card;
-    root.transactions[txKey] = { tid, type, amount:bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
-    return root;
+    card.audit = card.audit || {};
+    card.audit[txKey] = { type, amount:bookedCents / 100, timestamp, actorUid:auth.currentUser.uid };
+    return card;
   });
   if (!result.committed) throw new Error(failure);
-  return { amount:bookedCents / 100, balance:result.snapshot.child("cards/" + tid + "/balanceCents").val() / 100 };
+  const transactionEntry = { tid:normalizedTid, type, amount:bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
+  try {
+    await db.ref("transactions/" + txKey).set(transactionEntry);
+  } catch (logError) {
+    console.error("Verlauf konnte nicht separat gespeichert werden:", logError);
+  }
+  return { amount:bookedCents / 100, balance:result.snapshot.child("balanceCents").val() / 100 };
 }
 
 // ── Local Storage fallback ──
