@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29f</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29g</div>
   </div>
 </div>
 
@@ -1138,7 +1138,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert.";
+  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-29g";
 }
 
 function startFirebaseListeners() {
@@ -1176,11 +1176,29 @@ async function getServerCardBalance(tid) {
   const delays = [0, 400, 1000];
   for (const delay of delays) {
     if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-    const snapshot = await db.ref("cards/" + normalizedTid).once("value");
-    const card = snapshot.val();
+    const card = await firebaseRestRead("cards/" + normalizedTid);
     if (card && typeof card.balanceCents === "number") return Math.max(0, card.balanceCents) / 100;
   }
-  throw new Error("card-not-found");
+  const error = new Error("card-not-found");
+  error.tid = normalizedTid;
+  throw error;
+}
+
+async function firebaseRestRead(path) {
+  if (!auth || !auth.currentUser) throw new Error("offline");
+  const token = await auth.currentUser.getIdToken();
+  const safePath = String(path).split("/").map(encodeURIComponent).join("/");
+  const baseUrl = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "");
+  const url = baseUrl + "/" + safePath + ".json?auth=" + encodeURIComponent(token) + "&_=" + Date.now();
+  const response = await fetch(url, { cache:"no-store", headers:{ "Accept":"application/json" } });
+  if (!response.ok) {
+    const details = await response.text();
+    const error = new Error("Firebase-Serverfehler " + response.status);
+    error.code = "REST_" + response.status;
+    error.details = details;
+    throw error;
+  }
+  return response.json();
 }
 
 async function createFirebaseCard(tid, amountEuros) {
@@ -1196,8 +1214,7 @@ async function createFirebaseCard(tid, amountEuros) {
   updates["cards/" + tid] = card;
   updates["transactions/" + txKey] = transaction;
   await db.ref().update(updates);
-  const verification = await db.ref("cards/" + tid).once("value");
-  const storedCard = verification.val();
+  const storedCard = await firebaseRestRead("cards/" + tid);
   if (!storedCard || storedCard.tid !== tid || storedCard.balanceCents !== amountCents) {
     throw new Error("Firebase hat den neuen QR-Code nicht bestätigt");
   }
@@ -1419,7 +1436,7 @@ async function handleKasseScan(raw) {
   const { tid, balance } = parsed;
   let realBalance;
   try { realBalance = await getServerCardBalance(tid); }
-  catch (error) { showToast(error.message === "card-not-found" ? "QR-Code ist nicht in Firebase vorhanden" : "Guthaben konnte nicht geladen werden", "error"); return; }
+  catch (error) { showToast(error.message === "card-not-found" ? "QR-Code " + (error.tid || tid) + " ist nicht in Firebase vorhanden" : firebaseErrorText(error, "Guthaben konnte nicht geladen werden"), "error"); return; }
   const res = document.getElementById("kasseResult");
   res.style.display = "block";
   res.innerHTML = `
@@ -1488,7 +1505,7 @@ async function handleStandScan(raw) {
 
   let currentBal;
   try { currentBal = await getServerCardBalance(tid); }
-  catch (error) { showToast(error.message === "card-not-found" ? "QR-Code ist nicht in Firebase vorhanden" : "Guthaben konnte nicht geladen werden", "error"); return; }
+  catch (error) { showToast(error.message === "card-not-found" ? "QR-Code " + (error.tid || tid) + " ist nicht in Firebase vorhanden" : firebaseErrorText(error, "Guthaben konnte nicht geladen werden"), "error"); return; }
 
   currentTid = tid;
   currentBalance = currentBal;
