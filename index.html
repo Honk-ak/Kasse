@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-29i</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-30a</div>
   </div>
 </div>
 
@@ -792,6 +792,7 @@
         <div class="balance-amount" id="standBalance">0,00 €</div>
         <div class="balance-tid" id="standTid"></div>
       </div>
+      <button class="btn btn-secondary" style="margin-top:12px;" onclick="openCorrectionList()">↩ Verkauf korrigieren</button>
     </div>
 
     <div class="card">
@@ -938,6 +939,8 @@ let currentTid = null;
 let currentBalance = 0;
 let order = {}; // { productId: qty }
 let transactions = [];
+let selectedCorrectionTx = null;
+let correctionSelection = {};
 let scannerKasse = null;
 let scannerStand = null;
 let scannerRunning = false;
@@ -1005,13 +1008,14 @@ function applyRecommendedCash() {
 }
 
 function getAccounting() {
-  let loaded = 0, purchases = 0, payouts = 0;
+  let loaded = 0, grossPurchases = 0, corrections = 0, payouts = 0;
   const balances = {};
   transactions.forEach(tx => {
     const amount = Number(tx.amount) || 0;
     if (!balances[tx.tid]) balances[tx.tid] = 0;
     if (tx.type === "load") { loaded += amount; balances[tx.tid] += amount; }
-    if (tx.type === "purchase") { purchases += amount; balances[tx.tid] -= amount; }
+    if (tx.type === "purchase") { grossPurchases += amount; balances[tx.tid] -= amount; }
+    if (tx.type === "correction") { corrections += amount; balances[tx.tid] += amount; }
     if (tx.type === "payout") { payouts += amount; balances[tx.tid] -= amount; }
   });
   const openBalances = Object.entries(balances).filter(([, value]) => value > 0.004).map(([tid, value]) => ({ tid, balance: Math.round(value * 100) / 100 }));
@@ -1019,7 +1023,8 @@ function getAccounting() {
   const start = cashTotal(cashState.startCounts);
   const counted = cashTotal(cashState.endCounts);
   const expected = start + loaded - payouts;
-  return { start, loaded, purchases, payouts, open, openBalances, expected, counted, difference: counted - expected, qrNet: loaded - payouts, plausibilityDifference: loaded - payouts - purchases - open };
+  const purchases = grossPurchases - corrections;
+  return { start, loaded, grossPurchases, corrections, purchases, payouts, open, openBalances, expected, counted, difference: counted - expected, qrNet: loaded - payouts, plausibilityDifference: loaded - payouts - purchases - open };
 }
 
 function renderCashAccounting() {
@@ -1027,7 +1032,7 @@ function renderCashAccounting() {
   if (!container) return;
   const a = getAccounting();
   const line = (label, value, cls = "") => `<div class="accounting-row ${cls}"><span>${label}</span><span>${formatEuro(value)}</span></div>`;
-  container.innerHTML = line("Wechselgeld Start", a.start) + line("QR-Aufladungen", a.loaded) + line("Ausgezahltes Restguthaben", -a.payouts) + line("Soll-Kassenbestand", a.expected, "emphasis") + line("Gezählter Endbestand", a.counted) + line("Kassendifferenz", a.difference, "emphasis") + line("Warenumsatz", a.purchases) + line("Offenes Restguthaben", a.open) + `<div class="status-box ${Math.abs(a.plausibilityDifference) < 0.01 ? "status-ok" : "status-warn"}">Plausibilitätsprüfung: Aufladungen minus Auszahlungen ${formatEuro(a.qrNet)} = Warenumsatz plus offenes Restguthaben ${formatEuro(a.purchases + a.open)}${Math.abs(a.plausibilityDifference) < 0.01 ? " ✓" : " — Abweichung " + formatEuro(a.plausibilityDifference)}</div>`;
+  container.innerHTML = line("Wechselgeld Start", a.start) + line("QR-Aufladungen", a.loaded) + line("Ausgezahltes Restguthaben", -a.payouts) + line("Soll-Kassenbestand", a.expected, "emphasis") + line("Gezählter Endbestand", a.counted) + line("Kassendifferenz", a.difference, "emphasis") + line("Warenverkäufe brutto", a.grossPurchases) + line("Korrekturen / Gutschriften", -a.corrections) + line("Warenumsatz netto", a.purchases) + line("Offenes Restguthaben", a.open) + `<div class="status-box ${Math.abs(a.plausibilityDifference) < 0.01 ? "status-ok" : "status-warn"}">Plausibilitätsprüfung: Aufladungen minus Auszahlungen ${formatEuro(a.qrNet)} = Warenumsatz plus offenes Restguthaben ${formatEuro(a.purchases + a.open)}${Math.abs(a.plausibilityDifference) < 0.01 ? " ✓" : " — Abweichung " + formatEuro(a.plausibilityDifference)}</div>`;
 }
 
 function renderCashManagement() {
@@ -1138,7 +1143,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-29i";
+  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-30a";
 }
 
 function startFirebaseListeners() {
@@ -1163,7 +1168,7 @@ function listenTransactions() {
   if (!db) return;
   db.ref("transactions").on("value", snap => {
     const data = snap.val() || {};
-    transactions = Object.values(data).sort((a,b) => b.timestamp - a.timestamp);
+    transactions = Object.entries(data).map(([id, tx]) => Object.assign({ id }, tx)).sort((a,b) => b.timestamp - a.timestamp);
     renderLog();
     renderStats();
   });
@@ -1201,7 +1206,7 @@ async function firebaseRestRead(path) {
   return response.json();
 }
 
-async function firebaseRestCardTransaction(tid, type, requestedCents, txKey, timestamp, items) {
+async function firebaseRestCardTransaction(tid, type, requestedCents, txKey, timestamp, items, meta = {}) {
   if (!auth || !auth.currentUser) throw new Error("offline");
   const safeTid = encodeURIComponent(tid);
   const baseUrl = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "");
@@ -1222,15 +1227,30 @@ async function firebaseRestCardTransaction(tid, type, requestedCents, txKey, tim
     if (type === "load") bookedCents = requestedCents;
     else if (type === "purchase") bookedCents = requestedCents;
     else if (type === "payout") bookedCents = card.balanceCents;
+    else if (type === "correction") bookedCents = requestedCents;
     if (!Number.isInteger(bookedCents) || bookedCents <= 0) throw new Error("Ungültiger Buchungsbetrag");
-    const nextBalance = type === "load" ? card.balanceCents + bookedCents : card.balanceCents - bookedCents;
+    if (type === "correction") {
+      if (!meta.originalTxId || !meta.originalItems) throw new Error("Ursprünglicher Verkauf fehlt");
+      card.corrections = card.corrections || {};
+      const corrected = card.corrections[meta.originalTxId] || {};
+      items.forEach(item => {
+        const originalQty = Number(meta.originalItems[item.id]) || 0;
+        const alreadyCorrected = Number(corrected[item.id]) || 0;
+        const requestedQty = Number(item.qty) || 0;
+        if (requestedQty <= 0 || alreadyCorrected + requestedQty > originalQty) throw new Error("Diese Artikelmenge wurde bereits korrigiert");
+        corrected[item.id] = alreadyCorrected + requestedQty;
+      });
+      card.corrections[meta.originalTxId] = corrected;
+    }
+    const isCredit = type === "load" || type === "correction";
+    const nextBalance = isCredit ? card.balanceCents + bookedCents : card.balanceCents - bookedCents;
     if (nextBalance < 0) throw new Error("Guthaben reicht nicht aus");
 
     card.balanceCents = nextBalance;
     card.updatedAt = timestamp;
     card.status = nextBalance === 0 ? "empty" : "active";
     card.audit = card.audit || {};
-    card.audit[txKey] = { type, amount:bookedCents / 100, timestamp, actorUid:auth.currentUser.uid };
+    card.audit[txKey] = { type, amount:bookedCents / 100, timestamp, actorUid:auth.currentUser.uid, originalTxId:meta.originalTxId || null };
 
     const writeResponse = await fetch(url, {
       method:"PUT",
@@ -1272,7 +1292,7 @@ function firebaseErrorText(error, fallback) {
   return message && message.toLowerCase() !== "set" ? message : fallback;
 }
 
-async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
+async function commitFirebaseOperation(tid, type, amountEuros, items = [], meta = {}) {
   if (!ensureFirebaseReady()) throw new Error("offline");
   const normalizedTid = String(tid || "").trim();
   const closedAt = await firebaseRestRead("cashState/closedAt");
@@ -1280,8 +1300,9 @@ async function commitFirebaseOperation(tid, type, amountEuros, items = []) {
   const requestedCents = amountEuros == null ? null : Math.round(amountEuros * 100);
   const timestamp = Date.now();
   const txKey = db.ref("transactions").push().key;
-  const result = await firebaseRestCardTransaction(normalizedTid, type, requestedCents, txKey, timestamp, items);
+  const result = await firebaseRestCardTransaction(normalizedTid, type, requestedCents, txKey, timestamp, items, meta);
   const transactionEntry = { tid:normalizedTid, type, amount:result.bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
+  if (meta.originalTxId) transactionEntry.originalTxId = meta.originalTxId;
   try {
     await db.ref("transactions/" + txKey).set(transactionEntry);
   } catch (logError) {
@@ -1560,6 +1581,7 @@ function computeBalance(tid, initialBalance) {
   const balance = txForTid.reduce((sum, transaction) => {
     const amount = Number(transaction.amount) || 0;
     if (transaction.type === "load") return sum + amount;
+    if (transaction.type === "correction") return sum + amount;
     if (transaction.type === "purchase" || transaction.type === "payout") return sum - amount;
     return sum;
   }, 0);
@@ -1705,6 +1727,116 @@ async function confirmOrder() {
   } finally { if (currentTid) { button.disabled = false; button.textContent = "✓ Buchen"; } }
 }
 
+function correctedQuantitiesFor(originalTxId) {
+  const corrected = {};
+  transactions.filter(tx => tx.type === "correction" && tx.originalTxId === originalTxId).forEach(tx => {
+    (tx.items || []).forEach(item => { corrected[item.id] = (corrected[item.id] || 0) + (Number(item.qty) || 0); });
+  });
+  return corrected;
+}
+
+function remainingCorrectionItems(tx) {
+  const corrected = correctedQuantitiesFor(tx.id);
+  return (tx.items || []).map(item => Object.assign({}, item, {
+    remainingQty: Math.max(0, (Number(item.qty) || 0) - (Number(corrected[item.id]) || 0))
+  })).filter(item => item.remainingQty > 0);
+}
+
+function openCorrectionList() {
+  if (!currentTid) { showToast("Bitte zuerst QR-Code scannen", "error"); return; }
+  const purchases = transactions.filter(tx => tx.type === "purchase" && tx.tid === currentTid && remainingCorrectionItems(tx).length > 0);
+  if (!purchases.length) { showToast("Für diesen QR-Code gibt es keinen korrigierbaren Verkauf", "info"); return; }
+  const body = purchases.map(tx => {
+    const items = remainingCorrectionItems(tx).map(item => `${item.name} × ${item.remainingQty}`).join(", ");
+    return `<button class="btn btn-secondary" style="margin-bottom:8px;text-align:left;" onclick="selectCorrectionPurchase('${tx.id}')"><strong>${formatDate(tx.timestamp)} · ${tx.timeStr || formatTime(tx.timestamp)} · ${formatEuro(tx.amount)}</strong><br><span style="font-size:12px;color:var(--text2);">${items}</span></button>`;
+  }).join("");
+  openModal("Verkauf korrigieren", `<p style="color:var(--text2);margin-bottom:12px;">Welcher Verkauf soll korrigiert werden?</p>${body}`, [{ label:"Abbrechen", cls:"btn-secondary", fn:closeModal }]);
+}
+
+function selectCorrectionPurchase(transactionId) {
+  selectedCorrectionTx = transactions.find(tx => tx.id === transactionId && tx.type === "purchase") || null;
+  correctionSelection = {};
+  if (!selectedCorrectionTx) { showToast("Verkauf wurde nicht gefunden", "error"); closeModal(); return; }
+  renderCorrectionEditor();
+}
+
+function changeCorrectionQty(productId, delta) {
+  if (!selectedCorrectionTx) return;
+  const item = remainingCorrectionItems(selectedCorrectionTx).find(entry => entry.id === productId);
+  if (!item) return;
+  const next = Math.max(0, Math.min(item.remainingQty, (correctionSelection[productId] || 0) + delta));
+  if (next) correctionSelection[productId] = next;
+  else delete correctionSelection[productId];
+  renderCorrectionEditor();
+}
+
+function selectedCorrectionItems() {
+  if (!selectedCorrectionTx) return [];
+  return remainingCorrectionItems(selectedCorrectionTx).filter(item => correctionSelection[item.id] > 0).map(item => {
+    const qty = correctionSelection[item.id];
+    const price = Number(item.price) || ((Number(item.subtotal) || 0) / (Number(item.qty) || 1));
+    return { id:item.id, name:item.name, qty, price, subtotal:Math.round(price * qty * 100) / 100 };
+  });
+}
+
+function renderCorrectionEditor() {
+  const items = remainingCorrectionItems(selectedCorrectionTx);
+  const rows = items.map(item => {
+    const qty = correctionSelection[item.id] || 0;
+    return `<div class="order-item"><div><strong>${item.name}</strong><br><span style="font-size:11px;color:var(--text2);">Noch korrigierbar: ${item.remainingQty}</span></div><div style="display:flex;align-items:center;gap:10px;"><button class="remove-btn" onclick="changeCorrectionQty('${item.id}',-1)">−</button><strong>${qty}</strong><button class="remove-btn" style="background:var(--success);" onclick="changeCorrectionQty('${item.id}',1)">+</button></div></div>`;
+  }).join("");
+  const total = selectedCorrectionItems().reduce((sum, item) => sum + item.subtotal, 0);
+  openModal("Artikel zurücknehmen", `${rows}<div class="separator"></div><div class="order-total"><span>Gutschrift</span><span class="order-total-amount">${formatEuro(total)}</span></div>`, [
+    { label:"Gutschrift prüfen", cls:"btn-success", fn:prepareCorrection },
+    { label:"Zurück", cls:"btn-secondary", fn:openCorrectionList }
+  ]);
+}
+
+function prepareCorrection() {
+  const items = selectedCorrectionItems();
+  if (!items.length) { showToast("Bitte mindestens einen Artikel auswählen", "error"); return; }
+  const requiresPin = Date.now() - Number(selectedCorrectionTx.timestamp) > 10 * 60 * 1000;
+  const summary = items.map(item => `${item.name} × ${item.qty}`).join(", ");
+  const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const pinField = requiresPin ? `<div class="input-group" style="margin-top:14px;"><label class="input-label">Kassen-PIN erforderlich (Verkauf älter als 10 Minuten)</label><input type="password" inputmode="numeric" maxlength="4" class="input" id="correctionPin"></div>` : "";
+  openModal("Gutschrift bestätigen", `<p style="margin-bottom:8px;">${summary}</p><p style="font-size:20px;color:var(--success);font-family:var(--mono);">+${formatEuro(total)}</p>${pinField}`, [
+    { label:"Jetzt gutschreiben", cls:"btn-success", fn:() => confirmCorrection(requiresPin) },
+    { label:"Abbrechen", cls:"btn-secondary", fn:closeModal }
+  ]);
+}
+
+async function confirmCorrection(requiresPin) {
+  if (!selectedCorrectionTx || !currentTid) return;
+  if (requiresPin) {
+    const pin = document.getElementById("correctionPin").value;
+    if (pin !== PIN) { showToast("Kassen-PIN ist nicht richtig", "error"); return; }
+  }
+  try {
+    const original = await firebaseRestRead("transactions/" + selectedCorrectionTx.id);
+    if (!original || original.type !== "purchase" || original.tid !== currentTid) throw new Error("Ursprünglicher Verkauf wurde nicht gefunden");
+    const authoritativeItems = original.items || [];
+    const selected = selectedCorrectionItems();
+    const correctionItems = selected.map(selectedItem => {
+      const originalItem = authoritativeItems.find(item => item.id === selectedItem.id);
+      if (!originalItem || selectedItem.qty > Number(originalItem.qty)) throw new Error("Artikelmenge ist nicht mehr korrigierbar");
+      const price = Number(originalItem.price) || ((Number(originalItem.subtotal) || 0) / (Number(originalItem.qty) || 1));
+      return { id:originalItem.id, name:originalItem.name, qty:selectedItem.qty, price, subtotal:Math.round(price * selectedItem.qty * 100) / 100 };
+    });
+    const amount = correctionItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const originalItems = {};
+    authoritativeItems.forEach(item => { originalItems[item.id] = Number(item.qty) || 0; });
+    const result = await commitFirebaseOperation(currentTid, "correction", amount, correctionItems, { originalTxId:selectedCorrectionTx.id, originalItems });
+    currentBalance = result.balance;
+    document.getElementById("standBalance").textContent = formatEuro(currentBalance);
+    order = {};
+    renderOrder();
+    closeModal();
+    showToast("Gutgeschrieben: " + formatEuro(amount) + " · Neu: " + formatEuro(result.balance), "success");
+  } catch (error) {
+    showToast(firebaseErrorText(error, "Korrektur fehlgeschlagen"), "error");
+  }
+}
+
 // ── Transaction Storage ──
 function saveTransaction(entry) {
   if (firebaseOk && db) {
@@ -1731,6 +1863,7 @@ function renderLog() {
     let typeLabel = "", amtClass = "";
     if (tx.type === "load") { typeLabel = "⬆ Aufgeladen"; amtClass = "credit"; }
     else if (tx.type === "purchase") { typeLabel = "⬇ Kauf"; amtClass = "debit"; }
+    else if (tx.type === "correction") { typeLabel = "↩ Korrektur / Gutschrift"; amtClass = "credit"; }
     else if (tx.type === "payout") { typeLabel = "💵 Auszahlung"; amtClass = "payout"; }
     const itemsStr = tx.items && tx.items.length ? tx.items.map(i => `${i.name}×${i.qty}`).join(", ") : "";
     div.innerHTML = `
@@ -1762,6 +1895,14 @@ function renderStats() {
         productCounts[item.name] = (productCounts[item.name] || { qty: 0, revenue: 0 });
         productCounts[item.name].qty += item.qty;
         productCounts[item.name].revenue += item.subtotal;
+      });
+    }
+    if (tx.type === "correction") {
+      totalRevenue -= tx.amount;
+      tx.items && tx.items.forEach(item => {
+        productCounts[item.name] = (productCounts[item.name] || { qty: 0, revenue: 0 });
+        productCounts[item.name].qty -= item.qty;
+        productCounts[item.name].revenue -= item.subtotal;
       });
     }
     if (tx.type === "load") totalLoaded += tx.amount;
@@ -1812,7 +1953,7 @@ async function exportExcel() {
     const overview = workbook.addWorksheet("Übersicht");
     overview.getCell("A1").value = "Kassenabrechnung";
     addExcelTable(overview, "Kassenabrechnung", "A3", ["Kennzahl", "Betrag"], [
-      ["Wechselgeld Start", a.start], ["QR-Aufladungen gesamt", a.loaded], ["Ausgezahltes Restguthaben", -a.payouts], ["Soll-Kassenbestand", a.expected], ["Tatsächlich gezählter Bestand", a.counted], ["Kassendifferenz", a.difference], ["Warenumsatz", a.purchases], ["Offenes Restguthaben", a.open], ["QR-Netto", a.qrNet], ["Plausibilitätsdifferenz", a.plausibilityDifference]
+      ["Wechselgeld Start", a.start], ["QR-Aufladungen gesamt", a.loaded], ["Ausgezahltes Restguthaben", -a.payouts], ["Soll-Kassenbestand", a.expected], ["Tatsächlich gezählter Bestand", a.counted], ["Kassendifferenz", a.difference], ["Warenverkäufe brutto", a.grossPurchases], ["Korrekturen / Gutschriften", -a.corrections], ["Warenumsatz netto", a.purchases], ["Offenes Restguthaben", a.open], ["QR-Netto", a.qrNet], ["Plausibilitätsdifferenz", a.plausibilityDifference]
     ], [42, 18]);
     overview.getColumn(2).numFmt = '#,##0.00 [$€-407]';
     overview.getCell("D3").value = "Status"; overview.getCell("D3").font = { bold:true };
@@ -1824,8 +1965,8 @@ async function exportExcel() {
 
     const txSheet = workbook.addWorksheet("Transaktionen");
     txSheet.getCell("A1").value = "Transaktionen";
-    const txRows = [...transactions].sort((x,y) => x.timestamp - y.timestamp).map(tx => [tx.dateStr || formatDate(tx.timestamp), tx.timeStr || formatTime(tx.timestamp), tx.tid, tx.type === "load" ? "Aufladung" : tx.type === "purchase" ? "Kauf" : "Auszahlung", Number(tx.amount) || 0, (tx.items || []).map(item => `${item.name} × ${item.qty}`).join(", ")]);
-    addExcelTable(txSheet, "Transaktionen", "A3", ["Datum", "Uhrzeit", "Transaktions-ID", "Typ", "Betrag", "Artikel"], txRows, [14,11,20,15,14,50]);
+    const txRows = [...transactions].sort((x,y) => x.timestamp - y.timestamp).map(tx => [tx.dateStr || formatDate(tx.timestamp), tx.timeStr || formatTime(tx.timestamp), tx.tid, tx.type === "load" ? "Aufladung" : tx.type === "purchase" ? "Kauf" : tx.type === "correction" ? "Korrektur / Gutschrift" : "Auszahlung", Number(tx.amount) || 0, (tx.items || []).map(item => `${item.name} × ${item.qty}`).join(", "), tx.originalTxId || ""]);
+    addExcelTable(txSheet, "Transaktionen", "A3", ["Datum", "Uhrzeit", "Transaktions-ID", "Typ", "Betrag", "Artikel", "Bezug zum Verkauf"], txRows, [14,11,20,22,14,50,24]);
     txSheet.getColumn(5).numFmt = '#,##0.00 [$€-407]';
 
     const sales = workbook.addWorksheet("Verkäufe");
@@ -1835,6 +1976,11 @@ async function exportExcel() {
       if (!saleMap[item.name]) saleMap[item.name] = { qty:0, revenue:0 };
       saleMap[item.name].qty += Number(item.qty) || 0;
       saleMap[item.name].revenue += Number(item.subtotal) || 0;
+    }));
+    transactions.filter(tx => tx.type === "correction").forEach(tx => (tx.items || []).forEach(item => {
+      if (!saleMap[item.name]) saleMap[item.name] = { qty:0, revenue:0 };
+      saleMap[item.name].qty -= Number(item.qty) || 0;
+      saleMap[item.name].revenue -= Number(item.subtotal) || 0;
     }));
     addExcelTable(sales, "Verkaeufe", "A3", ["Produkt", "Menge", "Umsatz"], Object.entries(saleMap).map(([name,data]) => [name, data.qty, data.revenue]), [28,12,16]);
     sales.getColumn(3).numFmt = '#,##0.00 [$€-407]';
@@ -1873,7 +2019,7 @@ function exportExcelLegacy() {
       const item = tx.items.find(i => i.name === name);
       return item ? item.qty : 0;
     };
-    let typeDE = tx.type === "load" ? "Aufladung" : tx.type === "purchase" ? "Kauf" : "Auszahlung";
+    let typeDE = tx.type === "load" ? "Aufladung" : tx.type === "purchase" ? "Kauf" : tx.type === "correction" ? "Korrektur" : "Auszahlung";
     rows.push([
       tx.dateStr, tx.timeStr, tx.tid, typeDE, tx.amount,
       getQty("Leberkäsweckle"), getQty("Saiten"), getQty("Kuchen"),
@@ -1892,6 +2038,13 @@ function exportExcelLegacy() {
       PRODUCTS.forEach((p, i) => {
         const item = tx.items && tx.items.find(it => it.name === p.name);
         if (item) productTotals[i] += item.qty;
+      });
+    }
+    if (tx.type === "correction") {
+      total -= tx.amount;
+      PRODUCTS.forEach((p, i) => {
+        const item = tx.items && tx.items.find(it => it.name === p.name);
+        if (item) productTotals[i] -= item.qty;
       });
     }
   });
