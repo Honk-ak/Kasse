@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-30a</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-30b</div>
   </div>
 </div>
 
@@ -699,6 +699,9 @@
   </button>
   <button class="nav-btn" onclick="showScreen('auswertung')" id="nav-auswertung">
     <span class="nav-icon">📊</span>Auswertung
+  </button>
+  <button class="nav-btn" onclick="openAdminScreen()" id="nav-admin">
+    <span class="nav-icon">⚙️</span>Verwaltung
   </button>
 </div>
 
@@ -883,6 +886,48 @@
 
 </div>
 
+<!-- ═══════════ VERWALTUNG SCREEN ═══════════ -->
+<div class="screen" id="screen-admin">
+  <div class="card" id="adminLocked">
+    <div class="card-title">Geschützte Verwaltung</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Produkte, Preise und Veranstaltungen können nur mit der Verwaltungs-PIN geändert werden.</p>
+    <div class="input-group"><label class="input-label">Verwaltungs-PIN</label><input type="password" inputmode="numeric" maxlength="4" class="input" id="adminPinInput"></div>
+    <button class="btn btn-primary" onclick="unlockAdmin()">Verwaltung öffnen</button>
+  </div>
+
+  <div id="adminContent" style="display:none;">
+    <div class="card">
+      <div class="card-title">Aktive Veranstaltung</div>
+      <div id="activeEventAdminInfo"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Neue Veranstaltung</div>
+      <div class="input-group"><label class="input-label">Veranstaltungsname</label><input class="input" id="newEventName" placeholder="z. B. Sommerfest 2027"></div>
+      <div class="input-group"><label class="input-label">Datum</label><input type="date" class="input" id="newEventDate"></div>
+      <label style="display:flex;gap:10px;align-items:center;color:var(--text2);font-size:13px;margin-bottom:14px;"><input type="checkbox" id="copyProducts" checked> Produktkatalog der aktiven Veranstaltung übernehmen</label>
+      <button class="btn btn-primary" onclick="createNewEvent()">Neue Veranstaltung anlegen und aktivieren</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Veranstaltungsarchiv</div>
+      <div id="eventArchiveList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Produktkatalog</div>
+      <div id="adminProductList"></div>
+      <div class="separator"></div>
+      <div class="input-group"><label class="input-label">Produktname</label><input class="input" id="newProductName" placeholder="z. B. Cola"></div>
+      <div class="flex-row">
+        <div class="input-group" style="flex:1;"><label class="input-label">Preis (€)</label><input type="number" min="0" step="0.10" class="input" id="newProductPrice" placeholder="0,00"></div>
+        <div class="input-group" style="width:95px;"><label class="input-label">Symbol</label><input class="input" id="newProductEmoji" value="📦" maxlength="4"></div>
+      </div>
+      <button class="btn btn-success" onclick="addAdminProduct()">Produkt hinzufügen</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL -->
 <div class="modal-overlay hidden" id="modalOverlay">
   <div class="modal">
@@ -914,7 +959,9 @@ const FIREBASE_CONFIG = {
 // ═══════════════════════════════════════════════════════════
 
 const PIN = "1972";
-const PRODUCTS = [
+const ADMIN_PIN = "7319";
+const ADMIN_UIDS = ["kmz65fKRzUenfd6M2FUYjU3XgoS2"];
+const DEFAULT_PRODUCTS = [
   { id: "lk", name: "Leberkäsweckle", price: 3.50, emoji: "🥖" },
   { id: "sa", name: "Saiten",         price: 3.00, emoji: "🌭" },
   { id: "ku", name: "Kuchen",         price: 2.00, emoji: "🍰" },
@@ -923,6 +970,7 @@ const PRODUCTS = [
   { id: "ap", name: "Apfelschorle",   price: 3.00, emoji: "🥤" },
   { id: "ka", name: "Kaffee",         price: 2.00, emoji: "☕" },
 ];
+let PRODUCTS = DEFAULT_PRODUCTS.map((product, index) => Object.assign({ active:true, sortIndex:index }, product));
 const AMOUNTS = [5, 10, 20, 30, 40];
 
 // ── State ──
@@ -941,11 +989,28 @@ let order = {}; // { productId: qty }
 let transactions = [];
 let selectedCorrectionTx = null;
 let correctionSelection = {};
+let activeEventId = null;
+let activeEventMeta = { name:"Veranstaltung 2026", date:"", status:"active" };
+let eventListenerPaths = [];
+let adminUnlocked = false;
 let scannerKasse = null;
 let scannerStand = null;
 let scannerRunning = false;
 const CASH_DENOMINATIONS = [0.50, 1, 2, 5, 10, 20, 50, 100];
 let cashState = loadCashState();
+
+function eventPath(path = "") {
+  if (!activeEventId) throw new Error("Keine Veranstaltung ausgewählt");
+  return "events/" + activeEventId + (path ? "/" + path : "");
+}
+
+function productsAsFirebaseObject(products = PRODUCTS) {
+  const result = {};
+  products.forEach((product, index) => {
+    result[product.id] = { id:product.id, name:product.name, price:Number(product.price), emoji:product.emoji || "📦", active:product.active !== false, sortIndex:Number.isFinite(product.sortIndex) ? product.sortIndex : index };
+  });
+  return result;
+}
 
 function defaultCashState() {
   return { startCounts: {}, endCounts: {}, closedAt: null, closingOpenBalance: null };
@@ -960,7 +1025,7 @@ function loadCashState() {
 
 function saveCashState() {
   localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
-  if (firebaseOk && db) db.ref("cashState").set(cashState);
+  if (firebaseOk && db && activeEventId) db.ref(eventPath("cashState")).set(cashState);
   renderCashManagement();
 }
 
@@ -986,7 +1051,7 @@ function buildCashGrid(containerId, kind) {
       renderCashTotals();
     });
     row.querySelector("input").addEventListener("change", () => {
-      if (firebaseOk && db) db.ref("cashState").set(cashState);
+      if (firebaseOk && db && activeEventId) db.ref(eventPath("cashState")).set(cashState);
     });
     container.appendChild(row);
   });
@@ -1060,7 +1125,8 @@ async function closeEvent() {
   cashState.closingOpenBalance = a.open;
   cashState.closingOpenBalances = a.openBalances;
   try {
-    await db.ref("cashState").set(cashState);
+    await db.ref(eventPath("cashState")).set(cashState);
+    await db.ref(eventPath("meta/status")).set("closed");
     localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
     renderCashManagement(); closeModal();
     showToast("Veranstaltung abgeschlossen", "success");
@@ -1086,10 +1152,10 @@ function initFirebase() {
       updateFirebaseStatus();
     });
     authReadyPromise = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
       firebaseOk = !!user;
       document.getElementById("firebaseAuthOverlay").classList.toggle("hidden", !!user);
-      if (user) startFirebaseListeners();
+      if (user) await startFirebaseListeners();
       updateFirebaseStatus();
     });
   } catch(e) {
@@ -1130,10 +1196,15 @@ async function loginFirebase() {
 
 async function logoutFirebase() {
   if (!auth) return;
-  if (db) { db.ref("transactions").off(); db.ref("cashState").off(); }
+  if (db) {
+    db.ref("activeEventId").off();
+    eventListenerPaths.forEach(path => db.ref(path).off());
+  }
   await auth.signOut();
   firebaseOk = false;
   firebaseListenersStarted = false;
+  activeEventId = null;
+  eventListenerPaths = [];
   transactions = [];
   renderLog(); renderStats();
 }
@@ -1143,19 +1214,71 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = "<strong>✅ Firebase verbunden</strong> – Geräte werden synchronisiert · Version 2026-09-30a";
+  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-09-30b`;
 }
 
-function startFirebaseListeners() {
+async function startFirebaseListeners() {
   if (!db || firebaseListenersStarted) return;
   firebaseListenersStarted = true;
-  listenTransactions();
-  db.ref("cashState").on("value", snap => {
+  await ensureEventStructure();
+  db.ref("activeEventId").on("value", snap => {
+    const nextEventId = snap.val();
+    if (nextEventId && nextEventId !== activeEventId) attachEventListeners(nextEventId);
+  });
+  await attachEventListeners(activeEventId);
+}
+
+async function ensureEventStructure() {
+  const activeSnapshot = await db.ref("activeEventId").once("value");
+  if (activeSnapshot.exists()) { activeEventId = activeSnapshot.val(); return; }
+  const eventId = "veranstaltung_2026";
+  const [cardsSnap, txSnap, cashSnap] = await Promise.all([
+    db.ref("cards").once("value"), db.ref("transactions").once("value"), db.ref("cashState").once("value")
+  ]);
+  const now = Date.now();
+  const migratedCash = cashSnap.val() || cashState || defaultCashState();
+  const updates = {
+    activeEventId:eventId,
+    ["events/" + eventId + "/meta"]:{ name:"Veranstaltung 2026", date:new Date().toISOString().slice(0,10), status:migratedCash.closedAt ? "closed" : "active", createdAt:now, migratedAt:now },
+    ["events/" + eventId + "/products"]:productsAsFirebaseObject(DEFAULT_PRODUCTS),
+    ["events/" + eventId + "/cashState"]:migratedCash
+  };
+  if (cardsSnap.exists()) updates["events/" + eventId + "/cards"] = cardsSnap.val();
+  if (txSnap.exists()) updates["events/" + eventId + "/transactions"] = txSnap.val();
+  await db.ref().update(updates);
+  activeEventId = eventId;
+}
+
+async function attachEventListeners(eventId) {
+  if (!eventId) return;
+  eventListenerPaths.forEach(path => db.ref(path).off());
+  activeEventId = eventId;
+  eventListenerPaths = [eventPath("meta"), eventPath("products"), eventPath("cashState"), eventPath("transactions")];
+  db.ref(eventPath("meta")).on("value", snap => {
+    activeEventMeta = Object.assign({ name:"Veranstaltung", date:"", status:"active" }, snap.val() || {});
+    document.title = activeEventMeta.name + " – Veranstaltungskasse";
+    refreshHeaderMode();
+    updateFirebaseStatus();
+    if (adminUnlocked) renderAdmin();
+  });
+  db.ref(eventPath("products")).on("value", snap => {
+    const data = snap.val();
+    PRODUCTS = data ? Object.values(data).sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0)) : DEFAULT_PRODUCTS.map((product,index) => Object.assign({ active:true, sortIndex:index }, product));
+    buildProductGrid();
+    if (adminUnlocked) renderAdminProducts();
+  });
+  db.ref(eventPath("cashState")).on("value", snap => {
     if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
-    else db.ref("cashState").set(cashState);
+    else db.ref(eventPath("cashState")).set(defaultCashState());
     localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
     renderCashManagement();
   });
+  listenTransactions();
+  currentTid = null;
+  currentBalance = 0;
+  order = {};
+  const customer = document.getElementById("standCustomer");
+  if (customer) customer.style.display = "none";
 }
 
 function ensureFirebaseReady() {
@@ -1166,7 +1289,7 @@ function ensureFirebaseReady() {
 
 function listenTransactions() {
   if (!db) return;
-  db.ref("transactions").on("value", snap => {
+  db.ref(eventPath("transactions")).on("value", snap => {
     const data = snap.val() || {};
     transactions = Object.entries(data).map(([id, tx]) => Object.assign({ id }, tx)).sort((a,b) => b.timestamp - a.timestamp);
     renderLog();
@@ -1181,7 +1304,7 @@ async function getServerCardBalance(tid) {
   const delays = [0, 400, 1000];
   for (const delay of delays) {
     if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-    const card = await firebaseRestRead("cards/" + normalizedTid);
+    const card = await firebaseRestRead(eventPath("cards/" + normalizedTid));
     if (card && typeof card.balanceCents === "number") return Math.max(0, card.balanceCents) / 100;
   }
   const error = new Error("card-not-found");
@@ -1213,7 +1336,7 @@ async function firebaseRestCardTransaction(tid, type, requestedCents, txKey, tim
   let failure = "Buchung wurde abgelehnt";
   for (let attempt = 0; attempt < 5; attempt++) {
     const token = await auth.currentUser.getIdToken(attempt > 0);
-    const url = baseUrl + "/cards/" + safeTid + ".json?auth=" + encodeURIComponent(token) + "&_=" + Date.now();
+  const url = baseUrl + "/" + eventPath("cards/" + safeTid) + ".json?auth=" + encodeURIComponent(token) + "&_=" + Date.now();
     const readResponse = await fetch(url, {
       cache:"no-store",
       headers:{ "Accept":"application/json", "X-Firebase-ETag":"true" }
@@ -1268,16 +1391,16 @@ async function createFirebaseCard(tid, amountEuros) {
   if (!ensureFirebaseReady()) throw new Error("offline");
   const amountCents = Math.round(amountEuros * 100);
   const timestamp = Date.now();
-  const txKey = db.ref("transactions").push().key;
-  const closedSnapshot = await db.ref("cashState/closedAt").once("value");
+  const txKey = db.ref(eventPath("transactions")).push().key;
+  const closedSnapshot = await db.ref(eventPath("cashState/closedAt")).once("value");
   if (closedSnapshot.exists() && closedSnapshot.val()) throw new Error("Veranstaltung ist abgeschlossen");
   const card = { tid, initialCents:amountCents, balanceCents:amountCents, status:"active", createdAt:timestamp, updatedAt:timestamp };
   const transaction = { tid, type:"load", amount:amountCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items:[], actorUid:auth.currentUser.uid };
   const updates = {};
-  updates["cards/" + tid] = card;
-  updates["transactions/" + txKey] = transaction;
+  updates[eventPath("cards/" + tid)] = card;
+  updates[eventPath("transactions/" + txKey)] = transaction;
   await db.ref().update(updates);
-  const storedCard = await firebaseRestRead("cards/" + tid);
+  const storedCard = await firebaseRestRead(eventPath("cards/" + tid));
   if (!storedCard || storedCard.tid !== tid || storedCard.balanceCents !== amountCents) {
     throw new Error("Firebase hat den neuen QR-Code nicht bestätigt");
   }
@@ -1295,16 +1418,16 @@ function firebaseErrorText(error, fallback) {
 async function commitFirebaseOperation(tid, type, amountEuros, items = [], meta = {}) {
   if (!ensureFirebaseReady()) throw new Error("offline");
   const normalizedTid = String(tid || "").trim();
-  const closedAt = await firebaseRestRead("cashState/closedAt");
+  const closedAt = await firebaseRestRead(eventPath("cashState/closedAt"));
   if (closedAt) throw new Error("Veranstaltung ist abgeschlossen");
   const requestedCents = amountEuros == null ? null : Math.round(amountEuros * 100);
   const timestamp = Date.now();
-  const txKey = db.ref("transactions").push().key;
+  const txKey = db.ref(eventPath("transactions")).push().key;
   const result = await firebaseRestCardTransaction(normalizedTid, type, requestedCents, txKey, timestamp, items, meta);
   const transactionEntry = { tid:normalizedTid, type, amount:result.bookedCents / 100, timestamp, dateStr:formatDate(timestamp), timeStr:formatTime(timestamp), items, actorUid:auth.currentUser.uid };
   if (meta.originalTxId) transactionEntry.originalTxId = meta.originalTxId;
   try {
-    await db.ref("transactions/" + txKey).set(transactionEntry);
+    await db.ref(eventPath("transactions/" + txKey)).set(transactionEntry);
   } catch (logError) {
     console.error("Verlauf konnte nicht separat gespeichert werden:", logError);
   }
@@ -1349,7 +1472,7 @@ function checkPin() {
     mode = "kasse";
     document.getElementById("pinOverlay").classList.add("hidden");
     document.getElementById("mainNav").style.display = "flex";
-    document.getElementById("headerMode").textContent = "💰 Kasse";
+    refreshHeaderMode();
     showScreen("kasse");
     initFirebase();
   } else {
@@ -1363,7 +1486,7 @@ function switchToStand() {
   mode = "stand";
   document.getElementById("pinOverlay").classList.add("hidden");
   document.getElementById("standNav").style.display = "flex";
-  document.getElementById("headerMode").textContent = "🛒 Stand";
+  refreshHeaderMode();
   showScreen("stand");
   buildProductGrid();
   initFirebase();
@@ -1377,6 +1500,27 @@ function showScreen(name) {
   const nb = document.getElementById("nav-" + name) || document.getElementById("nav-" + name + "2");
   if (nb) nb.classList.add("active");
   if (name === "auswertung") renderStats();
+}
+
+function refreshHeaderMode() {
+  const label = mode === "stand" ? "🛒 Stand" : "💰 Kasse";
+  document.getElementById("headerMode").textContent = label + (activeEventMeta.name ? " · " + activeEventMeta.name : "");
+}
+
+function openAdminScreen() {
+  showScreen("admin");
+  if (adminUnlocked) renderAdmin();
+}
+
+function unlockAdmin() {
+  const input = document.getElementById("adminPinInput");
+  if (!auth || !auth.currentUser || !ADMIN_UIDS.includes(auth.currentUser.uid)) { showToast("Dieses Firebase-Konto ist nicht für die Verwaltung freigeschaltet", "error"); return; }
+  if (!input || input.value !== ADMIN_PIN) { showToast("Verwaltungs-PIN ist nicht richtig", "error"); return; }
+  input.value = "";
+  adminUnlocked = true;
+  document.getElementById("adminLocked").style.display = "none";
+  document.getElementById("adminContent").style.display = "block";
+  renderAdmin();
 }
 
 // ── Amount Selection (Multi-Select) ──
@@ -1415,7 +1559,7 @@ async function generateQR() {
   const randomPart = Math.random().toString(36).slice(2, 6).toUpperCase();
   const tid = "TX" + Date.now().toString(36).toUpperCase() + randomPart;
   currentTid = tid;
-  const data = JSON.stringify({ tid, balance: selectedAmount });
+  const data = JSON.stringify({ eventId:activeEventId, tid, balance: selectedAmount });
 
   try {
     await createFirebaseCard(tid, selectedAmount);
@@ -1484,7 +1628,9 @@ function startKasseScanner() {
 async function handleKasseScan(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
-  const { tid, balance } = parsed;
+  const { tid, balance, eventId } = parsed;
+  if (eventId && eventId !== activeEventId) { showToast("Dieser QR-Code gehört zu einer anderen Veranstaltung", "error"); return; }
+  if (!eventId && activeEventId !== "veranstaltung_2026") { showToast("Dieser ältere QR-Code gehört nicht zur aktuellen Veranstaltung", "error"); return; }
   let realBalance;
   try { realBalance = await getServerCardBalance(tid); }
   catch (error) { showToast(error.message === "card-not-found" ? "QR-Code " + (error.tid || tid) + " ist nicht in Firebase vorhanden" : firebaseErrorText(error, "Guthaben konnte nicht geladen werden"), "error"); return; }
@@ -1552,7 +1698,9 @@ function startStandScanner() {
 async function handleStandScan(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
-  const { tid, balance } = parsed;
+  const { tid, balance, eventId } = parsed;
+  if (eventId && eventId !== activeEventId) { showToast("Dieser QR-Code gehört zu einer anderen Veranstaltung", "error"); return; }
+  if (!eventId && activeEventId !== "veranstaltung_2026") { showToast("Dieser ältere QR-Code gehört nicht zur aktuellen Veranstaltung", "error"); return; }
 
   let currentBal;
   try { currentBal = await getServerCardBalance(tid); }
@@ -1592,7 +1740,7 @@ function computeBalance(tid, initialBalance) {
 function buildProductGrid() {
   const grid = document.getElementById("productGrid");
   grid.innerHTML = "";
-  PRODUCTS.forEach(p => {
+  PRODUCTS.filter(p => p.active !== false).sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0)).forEach(p => {
     const btn = document.createElement("div");
     btn.className = "product-btn";
     btn.id = "prod-" + p.id;
@@ -1812,7 +1960,7 @@ async function confirmCorrection(requiresPin) {
     if (pin !== PIN) { showToast("Kassen-PIN ist nicht richtig", "error"); return; }
   }
   try {
-    const original = await firebaseRestRead("transactions/" + selectedCorrectionTx.id);
+    const original = await firebaseRestRead(eventPath("transactions/" + selectedCorrectionTx.id));
     if (!original || original.type !== "purchase" || original.tid !== currentTid) throw new Error("Ursprünglicher Verkauf wurde nicht gefunden");
     const authoritativeItems = original.items || [];
     const selected = selectedCorrectionItems();
@@ -1840,7 +1988,7 @@ async function confirmCorrection(requiresPin) {
 // ── Transaction Storage ──
 function saveTransaction(entry) {
   if (firebaseOk && db) {
-    db.ref("transactions/" + entry.timestamp + "_" + entry.tid).set(entry);
+    db.ref(eventPath("transactions/" + entry.timestamp + "_" + entry.tid)).set(entry);
   } else {
     transactions.unshift(entry);
     saveLocal();
@@ -1957,10 +2105,14 @@ async function exportExcel() {
     ], [42, 18]);
     overview.getColumn(2).numFmt = '#,##0.00 [$€-407]';
     overview.getCell("D3").value = "Status"; overview.getCell("D3").font = { bold:true };
-    overview.getCell("D4").value = "Veranstaltungsabschluss";
-    overview.getCell("E4").value = cashState.closedAt ? `${formatDate(cashState.closedAt)} ${formatTime(cashState.closedAt)}` : "Noch nicht abgeschlossen";
-    overview.getCell("D5").value = "Plausibilitätsprüfung";
-    overview.getCell("E5").value = Math.abs(a.plausibilityDifference) < 0.01 ? "OK" : "Abweichung";
+    overview.getCell("D4").value = "Veranstaltung";
+    overview.getCell("E4").value = activeEventMeta.name || activeEventId;
+    overview.getCell("D5").value = "Veranstaltungsdatum";
+    overview.getCell("E5").value = activeEventMeta.date || "Ohne Datum";
+    overview.getCell("D6").value = "Veranstaltungsabschluss";
+    overview.getCell("E6").value = cashState.closedAt ? `${formatDate(cashState.closedAt)} ${formatTime(cashState.closedAt)}` : "Noch nicht abgeschlossen";
+    overview.getCell("D7").value = "Plausibilitätsprüfung";
+    overview.getCell("E7").value = Math.abs(a.plausibilityDifference) < 0.01 ? "OK" : "Abweichung";
     overview.getColumn(4).width = 27; overview.getColumn(5).width = 25;
 
     const txSheet = workbook.addWorksheet("Transaktionen");
@@ -2001,7 +2153,8 @@ async function exportExcel() {
     const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Veranstaltungskasse_${formatDate(Date.now()).replace(/\./g,"-")}.xlsx`;
+    const safeEventName = String(activeEventMeta.name || "Veranstaltung").replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g,"_");
+    link.download = `${safeEventName}_${formatDate(Date.now()).replace(/\./g,"-")}.xlsx`;
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     showToast("Excel mit intelligenten Tabellen exportiert", "success");
@@ -2060,13 +2213,126 @@ function exportExcelLegacy() {
   showToast("Excel exportiert!", "success");
 }
 
+// ── Verwaltung ──
+function escapeHtml(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" })[character]);
+}
+
+async function renderAdmin() {
+  if (!adminUnlocked || !activeEventId) return;
+  const info = document.getElementById("activeEventAdminInfo");
+  info.innerHTML = `<div class="input-group"><label class="input-label">Name</label><input class="input" id="editEventName" value="${escapeHtml(activeEventMeta.name)}"></div><div class="input-group"><label class="input-label">Datum</label><input type="date" class="input" id="editEventDate" value="${escapeHtml(activeEventMeta.date || "")}"></div><div class="status-box ${cashState.closedAt ? "status-ok" : "status-warn"}">${cashState.closedAt ? "Abgeschlossen" : "Aktiv"} · Kennung: ${escapeHtml(activeEventId)}</div><button class="btn btn-secondary" style="margin-top:10px;" onclick="saveEventMeta()">Name und Datum speichern</button>`;
+  renderAdminProducts();
+  const snapshot = await db.ref("events").once("value");
+  const events = snapshot.val() || {};
+  const rows = Object.entries(events).sort((a,b) => Number(b[1].meta && b[1].meta.createdAt) - Number(a[1].meta && a[1].meta.createdAt)).map(([id, event]) => {
+    const meta = event.meta || {};
+    const isCurrent = id === activeEventId;
+    const status = meta.status === "closed" || (event.cashState && event.cashState.closedAt) ? "Abgeschlossen" : "Aktiv";
+    return `<div class="order-item"><div><strong>${escapeHtml(meta.name || id)}</strong><br><span style="font-size:11px;color:var(--text2);">${escapeHtml(meta.date || "Ohne Datum")} · ${status}</span></div>${isCurrent ? '<span class="badge badge-info">Ausgewählt</span>' : `<button class="btn btn-secondary btn-sm" onclick="selectEvent('${id}')">Ansehen</button>`}</div>`;
+  }).join("");
+  document.getElementById("eventArchiveList").innerHTML = rows || '<p style="color:var(--text2);">Noch keine Veranstaltungen.</p>';
+}
+
+function renderAdminProducts() {
+  if (!adminUnlocked) return;
+  const container = document.getElementById("adminProductList");
+  if (!container) return;
+  const sorted = [...PRODUCTS].sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0));
+  container.innerHTML = sorted.map((product, index) => `<div class="card" style="padding:12px;margin-bottom:10px;opacity:${product.active === false ? ".55" : "1"};"><div class="flex-row"><input class="input" style="width:66px;" id="productEmoji_${product.id}" value="${escapeHtml(product.emoji || "📦")}" maxlength="4"><input class="input" style="flex:1;" id="productName_${product.id}" value="${escapeHtml(product.name)}"><input type="number" min="0" step="0.10" class="input" style="width:105px;" id="productPrice_${product.id}" value="${Number(product.price).toFixed(2)}"></div><div class="flex-row" style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="saveAdminProduct('${product.id}')">Speichern</button><button class="btn btn-secondary btn-sm" onclick="toggleAdminProduct('${product.id}')">${product.active === false ? "Aktivieren" : "Deaktivieren"}</button><button class="btn btn-secondary btn-sm" ${index === 0 ? "disabled" : ""} onclick="moveAdminProduct('${product.id}',-1)">↑</button><button class="btn btn-secondary btn-sm" ${index === sorted.length - 1 ? "disabled" : ""} onclick="moveAdminProduct('${product.id}',1)">↓</button></div></div>`).join("");
+}
+
+function ensureCatalogEditable() {
+  if (!cashState.closedAt) return true;
+  showToast("Der Produktkatalog einer abgeschlossenen Veranstaltung ist geschützt", "error");
+  return false;
+}
+
+async function saveEventMeta() {
+  if (!adminUnlocked) return;
+  const name = document.getElementById("editEventName").value.trim();
+  const date = document.getElementById("editEventDate").value;
+  if (!name) { showToast("Bitte Veranstaltungsnamen eingeben", "error"); return; }
+  await db.ref(eventPath("meta")).update({ name, date, updatedAt:Date.now() });
+  showToast("Veranstaltungsdaten gespeichert", "success");
+}
+
+async function createNewEvent() {
+  if (!adminUnlocked || !ensureFirebaseReady()) return;
+  if (!cashState.closedAt) { showToast("Bitte die aktuelle Veranstaltung zuerst abschließen", "error"); return; }
+  const name = document.getElementById("newEventName").value.trim();
+  const date = document.getElementById("newEventDate").value;
+  if (!name || !date) { showToast("Bitte Name und Datum eingeben", "error"); return; }
+  const eventId = "event_" + Date.now().toString(36).toLowerCase();
+  const copyProducts = document.getElementById("copyProducts").checked;
+  const catalog = copyProducts ? PRODUCTS : DEFAULT_PRODUCTS;
+  const updates = {};
+  updates["events/" + eventId + "/meta"] = { name, date, status:"active", createdAt:Date.now() };
+  updates["events/" + eventId + "/products"] = productsAsFirebaseObject(catalog);
+  updates["events/" + eventId + "/cashState"] = defaultCashState();
+  updates.activeEventId = eventId;
+  await db.ref().update(updates);
+  closeModal();
+  showToast("Neue Veranstaltung aktiviert", "success");
+}
+
+async function selectEvent(eventId) {
+  if (!adminUnlocked || eventId === activeEventId) return;
+  if (!cashState.closedAt) { showToast("Eine laufende Veranstaltung kann nicht verlassen werden", "error"); return; }
+  await db.ref("activeEventId").set(eventId);
+  showToast("Veranstaltung ausgewählt", "success");
+}
+
+async function saveAdminProduct(productId) {
+  if (!adminUnlocked || !ensureCatalogEditable()) return;
+  const current = PRODUCTS.find(product => product.id === productId);
+  if (!current) return;
+  const name = document.getElementById("productName_" + productId).value.trim();
+  const price = Number(document.getElementById("productPrice_" + productId).value);
+  const emoji = document.getElementById("productEmoji_" + productId).value.trim() || "📦";
+  if (!name || !Number.isFinite(price) || price < 0) { showToast("Produktname oder Preis ist ungültig", "error"); return; }
+  await db.ref(eventPath("products/" + productId)).update({ name, price:Math.round(price * 100) / 100, emoji, updatedAt:Date.now() });
+  showToast("Produkt gespeichert", "success");
+}
+
+async function addAdminProduct() {
+  if (!adminUnlocked || !ensureCatalogEditable()) return;
+  const name = document.getElementById("newProductName").value.trim();
+  const price = Number(document.getElementById("newProductPrice").value);
+  const emoji = document.getElementById("newProductEmoji").value.trim() || "📦";
+  if (!name || !Number.isFinite(price) || price < 0) { showToast("Produktname oder Preis ist ungültig", "error"); return; }
+  const id = "p_" + Date.now().toString(36).toLowerCase();
+  await db.ref(eventPath("products/" + id)).set({ id, name, price:Math.round(price * 100) / 100, emoji, active:true, sortIndex:PRODUCTS.length, createdAt:Date.now() });
+  document.getElementById("newProductName").value = "";
+  document.getElementById("newProductPrice").value = "";
+  showToast("Produkt hinzugefügt", "success");
+}
+
+async function toggleAdminProduct(productId) {
+  const product = PRODUCTS.find(entry => entry.id === productId);
+  if (!adminUnlocked || !product || !ensureCatalogEditable()) return;
+  await db.ref(eventPath("products/" + productId + "/active")).set(product.active === false);
+}
+
+async function moveAdminProduct(productId, direction) {
+  if (!adminUnlocked || !ensureCatalogEditable()) return;
+  const sorted = [...PRODUCTS].sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0));
+  const index = sorted.findIndex(product => product.id === productId);
+  const otherIndex = index + direction;
+  if (index < 0 || otherIndex < 0 || otherIndex >= sorted.length) return;
+  const updates = {};
+  updates[sorted[index].id + "/sortIndex"] = otherIndex;
+  updates[sorted[otherIndex].id + "/sortIndex"] = index;
+  await db.ref(eventPath("products")).update(updates);
+}
+
 // ── Reset ──
 function confirmReset() {
   openModal("⚠ Alle Daten löschen",
     '<p style="color:var(--text2);">Dieser Vorgang kann nicht rückgängig gemacht werden. Wirklich alle Transaktionen löschen?</p>',
     [{label: "Ja, löschen", cls: "btn-danger", fn: async () => {
       if (!ensureFirebaseReady()) return;
-      await db.ref().update({ transactions:null, cards:null, cashState:null });
+      await db.ref(eventPath()).update({ transactions:null, cards:null, cashState:defaultCashState() });
       transactions = [];
       localStorage.removeItem("vk_transactions");
       localStorage.removeItem("vk_cash_state");
