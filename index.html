@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-10-01a</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-10-01b</div>
   </div>
 </div>
 
@@ -905,7 +905,8 @@
       <div class="card-title">Neue Veranstaltung</div>
       <div class="input-group"><label class="input-label">Veranstaltungsname</label><input class="input" id="newEventName" placeholder="z. B. Sommerfest 2027"></div>
       <div class="input-group"><label class="input-label">Datum</label><input type="date" class="input" id="newEventDate"></div>
-      <label style="display:flex;gap:10px;align-items:center;color:var(--text2);font-size:13px;margin-bottom:14px;"><input type="checkbox" id="copyProducts" checked> Produktkatalog der aktiven Veranstaltung übernehmen</label>
+      <label style="display:flex;gap:10px;align-items:center;color:var(--text2);font-size:13px;margin-bottom:6px;"><input type="checkbox" id="copyProducts" checked> Produktkatalog der ausgewählten Veranstaltung übernehmen</label>
+      <p style="font-size:11px;color:var(--text2);margin-bottom:14px;">Ohne Häkchen startet die neue Veranstaltung mit einem leeren Produktkatalog.</p>
       <button class="btn btn-primary" onclick="createNewEvent()">Neue Veranstaltung anlegen und aktivieren</button>
     </div>
 
@@ -1218,7 +1219,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-01a`;
+  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-01b`;
 }
 
 async function startFirebaseListeners() {
@@ -1294,7 +1295,7 @@ async function attachEventListeners(eventId) {
   db.ref(basePath + "/products").on("value", snap => {
     if (activeEventId !== listenerEventId) return;
     const data = snap.val();
-    PRODUCTS = data ? Object.values(data).sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0)) : DEFAULT_PRODUCTS.map((product,index) => Object.assign({ active:true, sortIndex:index }, product));
+    PRODUCTS = data ? Object.values(data).sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0)) : [];
     buildProductGrid();
     if (adminUnlocked) renderAdminProducts();
   });
@@ -1775,7 +1776,12 @@ function computeBalance(tid, initialBalance) {
 function buildProductGrid() {
   const grid = document.getElementById("productGrid");
   grid.innerHTML = "";
-  PRODUCTS.filter(p => p.active !== false).sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0)).forEach(p => {
+  const activeProducts = PRODUCTS.filter(p => p.active !== false).sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0));
+  if (!activeProducts.length) {
+    grid.innerHTML = '<p style="color:var(--text2);font-size:13px;grid-column:1/-1;">Für diese Veranstaltung wurden noch keine aktiven Produkte angelegt.</p>';
+    return;
+  }
+  activeProducts.forEach(p => {
     const btn = document.createElement("div");
     btn.className = "product-btn";
     btn.id = "prod-" + p.id;
@@ -2256,7 +2262,9 @@ function escapeHtml(value) {
 async function renderAdmin() {
   if (!adminUnlocked || !activeEventId) return;
   const info = document.getElementById("activeEventAdminInfo");
-  info.innerHTML = `<div class="input-group"><label class="input-label">Name</label><input class="input" id="editEventName" value="${escapeHtml(activeEventMeta.name)}"></div><div class="input-group"><label class="input-label">Datum</label><input type="date" class="input" id="editEventDate" value="${escapeHtml(activeEventMeta.date || "")}"></div><div class="status-box ${cashState.closedAt ? "status-ok" : "status-warn"}">${cashState.closedAt ? "Abgeschlossen" : "Aktiv"} · Kennung: ${escapeHtml(activeEventId)}</div><button class="btn btn-secondary" style="margin-top:10px;" onclick="saveEventMeta()">Name und Datum speichern</button>`;
+  const eventClosed = !!cashState.closedAt;
+  const readOnly = eventClosed ? "disabled" : "";
+  info.innerHTML = `<div class="input-group"><label class="input-label">Name</label><input class="input" id="editEventName" value="${escapeHtml(activeEventMeta.name)}" ${readOnly}></div><div class="input-group"><label class="input-label">Datum</label><input type="date" class="input" id="editEventDate" value="${escapeHtml(activeEventMeta.date || "")}" ${readOnly}></div><div class="status-box ${eventClosed ? "status-ok" : "status-warn"}">${eventClosed ? "✅ Abgeschlossen · schreibgeschützt" : "● Aktiv"} · Kennung: ${escapeHtml(activeEventId)}</div><button class="btn btn-secondary" style="margin-top:10px;" onclick="saveEventMeta()" ${readOnly}>${eventClosed ? "Name und Datum sind geschützt" : "Name und Datum speichern"}</button>`;
   renderAdminProducts();
   const snapshot = await db.ref("events").once("value");
   const events = snapshot.val() || {};
@@ -2288,6 +2296,8 @@ function ensureCatalogEditable() {
 
 async function saveEventMeta() {
   if (!adminUnlocked) return;
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
+  if (cashState.closedAt) { showToast("Name und Datum einer abgeschlossenen Veranstaltung sind geschützt", "error"); return; }
   const name = document.getElementById("editEventName").value.trim();
   const date = document.getElementById("editEventDate").value;
   if (!name) { showToast("Bitte Veranstaltungsnamen eingeben", "error"); return; }
@@ -2303,7 +2313,7 @@ async function createNewEvent() {
   if (!name || !date) { showToast("Bitte Name und Datum eingeben", "error"); return; }
   const eventId = "event_" + Date.now().toString(36).toLowerCase();
   const copyProducts = document.getElementById("copyProducts").checked;
-  const catalog = copyProducts ? PRODUCTS : DEFAULT_PRODUCTS;
+  const catalog = copyProducts ? PRODUCTS : [];
   const updates = {};
   updates["events/" + eventId + "/meta"] = { name, date, status:"active", createdAt:Date.now() };
   updates["events/" + eventId + "/products"] = productsAsFirebaseObject(catalog);
