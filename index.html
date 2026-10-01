@@ -649,7 +649,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-09-30c</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-10-01a</div>
   </div>
 </div>
 
@@ -897,7 +897,7 @@
 
   <div id="adminContent" style="display:none;">
     <div class="card">
-      <div class="card-title">Aktive Veranstaltung</div>
+      <div class="card-title">Auf diesem Gerät ausgewählte Veranstaltung</div>
       <div id="activeEventAdminInfo"></div>
     </div>
 
@@ -992,6 +992,7 @@ let correctionSelection = {};
 let activeEventId = null;
 let activeEventMeta = { name:"Veranstaltung 2026", date:"", status:"active" };
 let eventListenerPaths = [];
+let eventDataReady = false;
 let adminUnlocked = false;
 let scannerKasse = null;
 let scannerStand = null;
@@ -1044,7 +1045,7 @@ function buildCashGrid(containerId, kind) {
     const key = denominationKey(denomination);
     const row = document.createElement("div");
     row.className = "cash-row";
-    row.innerHTML = `<label>${formatEuro(denomination)} × Anzahl</label><input type="number" min="0" step="1" inputmode="numeric" value="${Number(counts[key]) || 0}" ${kind === "start" && cashState.closedAt ? "disabled" : ""}>`;
+    row.innerHTML = `<label>${formatEuro(denomination)} × Anzahl</label><input type="number" min="0" step="1" inputmode="numeric" value="${Number(counts[key]) || 0}" ${cashState.closedAt || !eventDataReady ? "disabled" : ""}>`;
     row.querySelector("input").addEventListener("input", event => {
       counts[key] = Math.max(0, parseInt(event.target.value, 10) || 0);
       localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
@@ -1066,6 +1067,7 @@ function renderCashTotals() {
 }
 
 function applyRecommendedCash() {
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   if (cashState.closedAt) return;
   cashState.startCounts = { "0_5":20, "1":10, "2":10, "5":12, "10":15, "20":7, "50":0, "100":0 };
   saveCashState();
@@ -1111,6 +1113,7 @@ function renderCashManagement() {
 }
 
 function confirmCloseEvent() {
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   const a = getAccounting();
   openModal("Veranstaltung abschließen", `<p style="color:var(--text2);line-height:1.6;">Gezählter Endbestand: <strong style="color:var(--text)">${formatEuro(a.counted)}</strong><br>Sollbestand: <strong style="color:var(--text)">${formatEuro(a.expected)}</strong><br>Offenes Restguthaben: <strong style="color:var(--accent)">${formatEuro(a.open)}</strong><br><br>Nach dem Abschluss sind keine Aufladungen oder Warenverkäufe mehr möglich.</p>`, [
     { label:"Jetzt abschließen", cls:"btn-danger", fn:closeEvent },
@@ -1134,6 +1137,7 @@ async function closeEvent() {
 }
 
 function ensureEventOpen() {
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return false; }
   if (!cashState.closedAt) return true;
   showToast("Veranstaltung ist bereits abgeschlossen", "error");
   return false;
@@ -1197,13 +1201,13 @@ async function loginFirebase() {
 async function logoutFirebase() {
   if (!auth) return;
   if (db) {
-    db.ref("activeEventId").off();
     eventListenerPaths.forEach(path => db.ref(path).off());
   }
   await auth.signOut();
   firebaseOk = false;
   firebaseListenersStarted = false;
   activeEventId = null;
+  eventDataReady = false;
   eventListenerPaths = [];
   transactions = [];
   renderLog(); renderStats();
@@ -1214,23 +1218,35 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-09-30c`;
+  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-01a`;
 }
 
 async function startFirebaseListeners() {
   if (!db || firebaseListenersStarted) return;
   firebaseListenersStarted = true;
   await ensureEventStructure();
-  db.ref("activeEventId").on("value", snap => {
-    const nextEventId = snap.val();
-    if (nextEventId && nextEventId !== activeEventId) attachEventListeners(nextEventId);
-  });
   await attachEventListeners(activeEventId);
 }
 
 async function ensureEventStructure() {
-  const activeSnapshot = await db.ref("activeEventId").once("value");
-  if (activeSnapshot.exists()) { activeEventId = activeSnapshot.val(); return; }
+  const locallySelected = localStorage.getItem("vk_selected_event_id");
+  if (locallySelected) {
+    const localEventSnapshot = await db.ref("events/" + locallySelected + "/meta").once("value");
+    if (localEventSnapshot.exists()) { activeEventId = locallySelected; return; }
+  }
+  const [defaultSnapshot, formerGlobalSnapshot] = await Promise.all([
+    db.ref("defaultEventId").once("value"), db.ref("activeEventId").once("value")
+  ]);
+  const fallbackEventId = defaultSnapshot.val() || formerGlobalSnapshot.val();
+  if (fallbackEventId) {
+    const fallbackSnapshot = await db.ref("events/" + fallbackEventId + "/meta").once("value");
+    if (fallbackSnapshot.exists()) {
+      activeEventId = fallbackEventId;
+      localStorage.setItem("vk_selected_event_id", activeEventId);
+      if (!defaultSnapshot.exists()) await db.ref("defaultEventId").set(activeEventId);
+      return;
+    }
+  }
   const eventId = "veranstaltung_2026";
   const [cardsSnap, txSnap, cashSnap] = await Promise.all([
     db.ref("cards").once("value"), db.ref("transactions").once("value"), db.ref("cashState").once("value")
@@ -1238,7 +1254,7 @@ async function ensureEventStructure() {
   const now = Date.now();
   const migratedCash = cashSnap.val() || cashState || defaultCashState();
   const updates = {
-    activeEventId:eventId,
+    defaultEventId:eventId,
     ["events/" + eventId + "/meta"]:{ name:"Veranstaltung 2026", date:new Date().toISOString().slice(0,10), status:migratedCash.closedAt ? "closed" : "active", createdAt:now, migratedAt:now },
     ["events/" + eventId + "/products"]:productsAsFirebaseObject(DEFAULT_PRODUCTS),
     ["events/" + eventId + "/cashState"]:migratedCash
@@ -1247,12 +1263,16 @@ async function ensureEventStructure() {
   if (txSnap.exists()) updates["events/" + eventId + "/transactions"] = txSnap.val();
   await db.ref().update(updates);
   activeEventId = eventId;
+  localStorage.setItem("vk_selected_event_id", activeEventId);
 }
 
 async function attachEventListeners(eventId) {
   if (!eventId) return;
   eventListenerPaths.forEach(path => db.ref(path).off());
   activeEventId = eventId;
+  localStorage.setItem("vk_selected_event_id", eventId);
+  eventDataReady = false;
+  activeEventMeta = { name:"Veranstaltung wird geladen…", date:"", status:"loading" };
   const listenerEventId = eventId;
   const basePath = "events/" + eventId;
   eventListenerPaths = [basePath + "/meta", basePath + "/products", basePath + "/cashState", basePath + "/transactions"];
@@ -1283,6 +1303,7 @@ async function attachEventListeners(eventId) {
     if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
     else db.ref(basePath + "/cashState").set(defaultCashState());
     localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+    eventDataReady = true;
     renderCashManagement();
     if (adminUnlocked) renderAdmin();
   });
@@ -2242,8 +2263,10 @@ async function renderAdmin() {
   const rows = Object.entries(events).sort((a,b) => Number(b[1].meta && b[1].meta.createdAt) - Number(a[1].meta && a[1].meta.createdAt)).map(([id, event]) => {
     const meta = event.meta || {};
     const isCurrent = id === activeEventId;
-    const status = meta.status === "closed" || (event.cashState && event.cashState.closedAt) ? "Abgeschlossen" : "Aktiv";
-    return `<div class="order-item"><div><strong>${escapeHtml(meta.name || id)}</strong><br><span style="font-size:11px;color:var(--text2);">${escapeHtml(meta.date || "Ohne Datum")} · ${status}</span></div>${isCurrent ? '<span class="badge badge-info">Ausgewählt</span>' : `<button class="btn btn-secondary btn-sm" onclick="selectEvent('${id}')">Ansehen</button>`}</div>`;
+    const isClosed = meta.status === "closed" || (event.cashState && event.cashState.closedAt);
+    const statusBadge = isClosed ? '<span style="font-size:11px;color:var(--text2);">✅ Abgeschlossen</span>' : '<span style="font-size:11px;color:var(--success);">● Aktiv</span>';
+    const action = isCurrent ? '<span class="badge badge-info">Auf diesem Gerät ausgewählt</span>' : `<button class="btn btn-secondary btn-sm" onclick="selectEvent('${id}')">${isClosed ? "Schreibgeschützt ansehen" : "Auf diesem Gerät öffnen"}</button>`;
+    return `<div class="order-item"><div><strong>${escapeHtml(meta.name || id)}</strong><br><span style="font-size:11px;color:var(--text2);">${escapeHtml(meta.date || "Ohne Datum")}</span><br>${statusBadge}</div><div style="max-width:190px;text-align:right;">${action}</div></div>`;
   }).join("");
   document.getElementById("eventArchiveList").innerHTML = rows || '<p style="color:var(--text2);">Noch keine Veranstaltungen.</p>';
 }
@@ -2257,6 +2280,7 @@ function renderAdminProducts() {
 }
 
 function ensureCatalogEditable() {
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return false; }
   if (!cashState.closedAt) return true;
   showToast("Der Produktkatalog einer abgeschlossenen Veranstaltung ist geschützt", "error");
   return false;
@@ -2273,7 +2297,7 @@ async function saveEventMeta() {
 
 async function createNewEvent() {
   if (!adminUnlocked || !ensureFirebaseReady()) return;
-  if (!cashState.closedAt) { showToast("Bitte die aktuelle Veranstaltung zuerst abschließen", "error"); return; }
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   const name = document.getElementById("newEventName").value.trim();
   const date = document.getElementById("newEventDate").value;
   if (!name || !date) { showToast("Bitte Name und Datum eingeben", "error"); return; }
@@ -2284,17 +2308,17 @@ async function createNewEvent() {
   updates["events/" + eventId + "/meta"] = { name, date, status:"active", createdAt:Date.now() };
   updates["events/" + eventId + "/products"] = productsAsFirebaseObject(catalog);
   updates["events/" + eventId + "/cashState"] = defaultCashState();
-  updates.activeEventId = eventId;
+  updates.defaultEventId = eventId;
   await db.ref().update(updates);
-  closeModal();
+  await attachEventListeners(eventId);
   showToast("Neue Veranstaltung aktiviert", "success");
 }
 
 async function selectEvent(eventId) {
   if (!adminUnlocked || eventId === activeEventId) return;
-  if (!cashState.closedAt) { showToast("Eine laufende Veranstaltung kann nicht verlassen werden", "error"); return; }
-  await db.ref("activeEventId").set(eventId);
-  showToast("Veranstaltung ausgewählt", "success");
+  if (Object.keys(order).length > 0) { showToast("Bitte die offene Bestellung zuerst abschließen oder abbrechen", "error"); return; }
+  await attachEventListeners(eventId);
+  showToast("Veranstaltung auf diesem Gerät ausgewählt", "success");
 }
 
 async function saveAdminProduct(productId) {
@@ -2342,6 +2366,8 @@ async function moveAdminProduct(productId, direction) {
 
 // ── Reset ──
 function confirmReset() {
+  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
+  if (cashState.closedAt) { showToast("Abgeschlossene Veranstaltungen sind schreibgeschützt", "error"); return; }
   openModal("⚠ Alle Daten löschen",
     '<p style="color:var(--text2);">Dieser Vorgang kann nicht rückgängig gemacht werden. Wirklich alle Transaktionen löschen?</p>',
     [{label: "Ja, löschen", cls: "btn-danger", fn: async () => {
