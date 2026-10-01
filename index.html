@@ -649,14 +649,15 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-10-01b</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version Firebase 2026-10-01c</div>
   </div>
 </div>
 
 <!-- PIN OVERLAY -->
 <div class="pin-overlay" id="pinOverlay">
   <div class="pin-title">Veranstaltungskasse</div>
-  <div class="pin-subtitle">🔐 Kassen-PIN eingeben</div>
+  <div class="pin-subtitle">Geräteart wählen</div>
+  <p style="max-width:330px;text-align:center;color:var(--text2);font-size:13px;line-height:1.5;margin:0 0 14px;">Für Kasse und Verwaltung bitte die Kassen-PIN eingeben. Stand und Auswertung erhalten nur die jeweils benötigten Funktionen.</p>
   <div class="pin-dots">
     <div class="pin-dot" id="d0"></div>
     <div class="pin-dot" id="d1"></div>
@@ -677,13 +678,14 @@
     <button class="pin-key" onclick="pinInput('0')">0</button>
     <button class="pin-key" onclick="switchToStand()">Stand</button>
   </div>
+  <button class="btn btn-secondary" style="max-width:330px;margin-top:12px;" onclick="switchToView()">Nur Verlauf und Auswertung</button>
   <div class="pin-error" id="pinError"></div>
 </div>
 
 <!-- HEADER -->
 <div class="header">
   <div class="header-logo">⚡ Kasse</div>
-  <div class="header-mode" id="headerMode">Wird geladen…</div>
+  <button class="header-mode" id="headerMode" onclick="requestDeviceModeChange()" style="cursor:pointer;border:1px solid var(--border);">Wird geladen…</button>
 </div>
 
 <!-- NAV -->
@@ -881,9 +883,19 @@
   <div class="card">
     <div class="card-title">Export</div>
     <button class="btn btn-primary" onclick="exportExcel()" style="margin-bottom:10px;">📥 Excel exportieren</button>
-    <button class="btn btn-danger" onclick="confirmReset()">🗑️ Alle Daten löschen</button>
+    <p style="font-size:12px;color:var(--text2);">Das Zurücksetzen von Testdaten und das Löschen von Veranstaltungen erfolgt geschützt in der Verwaltung.</p>
   </div>
 
+</div>
+
+<!-- AUSWERTUNGS-NAV -->
+<div class="nav" id="viewNav" style="display:none">
+  <button class="nav-btn active" onclick="showScreen('log')" id="nav-log3">
+    <span class="nav-icon">📋</span>Verlauf
+  </button>
+  <button class="nav-btn" onclick="showScreen('auswertung')" id="nav-auswertung3">
+    <span class="nav-icon">📊</span>Auswertung
+  </button>
 </div>
 
 <!-- ═══════════ VERWALTUNG SCREEN ═══════════ -->
@@ -891,8 +903,16 @@
   <div class="card" id="adminLocked">
     <div class="card-title">Geschützte Verwaltung</div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Produkte, Preise und Veranstaltungen können nur mit der Verwaltungs-PIN geändert werden.</p>
-    <div class="input-group"><label class="input-label">Verwaltungs-PIN</label><input type="password" inputmode="numeric" maxlength="4" class="input" id="adminPinInput"></div>
-    <button class="btn btn-primary" onclick="unlockAdmin()">Verwaltung öffnen</button>
+    <div class="pin-dots" style="margin:16px auto;">
+      <div class="pin-dot" id="ad0"></div><div class="pin-dot" id="ad1"></div><div class="pin-dot" id="ad2"></div><div class="pin-dot" id="ad3"></div>
+    </div>
+    <div class="pin-pad" style="margin:0 auto;">
+      <button class="pin-key" onclick="adminPinInput('1')">1</button><button class="pin-key" onclick="adminPinInput('2')">2</button><button class="pin-key" onclick="adminPinInput('3')">3</button>
+      <button class="pin-key" onclick="adminPinInput('4')">4</button><button class="pin-key" onclick="adminPinInput('5')">5</button><button class="pin-key" onclick="adminPinInput('6')">6</button>
+      <button class="pin-key" onclick="adminPinInput('7')">7</button><button class="pin-key" onclick="adminPinInput('8')">8</button><button class="pin-key" onclick="adminPinInput('9')">9</button>
+      <button class="pin-key del" onclick="adminPinDel()">⌫</button><button class="pin-key" onclick="adminPinInput('0')">0</button><button class="pin-key" onclick="unlockAdmin()">✓</button>
+    </div>
+    <div class="pin-error" id="adminPinError"></div>
   </div>
 
   <div id="adminContent" style="display:none;">
@@ -913,6 +933,17 @@
     <div class="card">
       <div class="card-title">Veranstaltungsarchiv</div>
       <div id="eventArchiveList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Geräteart und Datenbereinigung</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px;">Die Geräteart gilt nur für diesen Browser. Ein Testlauf setzt Buchungen, QR-Codes und Kassenwerte der ausgewählten Veranstaltung zurück; Name und Produktkatalog bleiben erhalten.</p>
+      <div class="flex-row" style="margin-bottom:10px;">
+        <button class="btn btn-secondary btn-sm" onclick="setDeviceMode('kasse')">Kasse / Verwaltung</button>
+        <button class="btn btn-secondary btn-sm" onclick="setDeviceMode('stand')">Stand</button>
+        <button class="btn btn-secondary btn-sm" onclick="setDeviceMode('view')">Nur Auswertung</button>
+      </div>
+      <button class="btn btn-danger" onclick="confirmTestReset()">Ausgewählte Veranstaltung als Testlauf zurücksetzen</button>
     </div>
 
     <div class="card">
@@ -975,7 +1006,7 @@ let PRODUCTS = DEFAULT_PRODUCTS.map((product, index) => Object.assign({ active:t
 const AMOUNTS = [5, 10, 20, 30, 40];
 
 // ── State ──
-let mode = ""; // "kasse" or "stand"
+let mode = ""; // "kasse", "stand" oder "view"; nur lokal auf diesem Gerät
 let db = null;
 let auth = null;
 let firebaseOk = false;
@@ -995,6 +1026,9 @@ let activeEventMeta = { name:"Veranstaltung 2026", date:"", status:"active" };
 let eventListenerPaths = [];
 let eventDataReady = false;
 let adminUnlocked = false;
+let adminPinBuffer = "";
+let deviceChangePinBuffer = "";
+let deviceModeChangeAuthorized = false;
 let scannerKasse = null;
 let scannerStand = null;
 let scannerRunning = false;
@@ -1046,7 +1080,7 @@ function buildCashGrid(containerId, kind) {
     const key = denominationKey(denomination);
     const row = document.createElement("div");
     row.className = "cash-row";
-    row.innerHTML = `<label>${formatEuro(denomination)} × Anzahl</label><input type="number" min="0" step="1" inputmode="numeric" value="${Number(counts[key]) || 0}" ${cashState.closedAt || !eventDataReady ? "disabled" : ""}>`;
+    row.innerHTML = `<label>${formatEuro(denomination)} × Anzahl</label><input type="number" min="0" step="1" inputmode="numeric" value="${Number(counts[key]) || 0}" ${cashState.closedAt || !eventDataReady || mode !== "kasse" ? "disabled" : ""}>`;
     row.querySelector("input").addEventListener("input", event => {
       counts[key] = Math.max(0, parseInt(event.target.value, 10) || 0);
       localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
@@ -1068,6 +1102,7 @@ function renderCashTotals() {
 }
 
 function applyRecommendedCash() {
+  if (!ensureKasseMode()) return;
   if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   if (cashState.closedAt) return;
   cashState.startCounts = { "0_5":20, "1":10, "2":10, "5":12, "10":15, "20":7, "50":0, "100":0 };
@@ -1110,10 +1145,11 @@ function renderCashManagement() {
   const status = document.getElementById("eventCloseStatus");
   const button = document.getElementById("closeEventBtn");
   if (status) status.innerHTML = cashState.closedAt ? `<div class="status-box status-ok">Abgeschlossen am ${formatDate(cashState.closedAt)} um ${formatTime(cashState.closedAt)}. Festgehaltenes offenes Restguthaben: ${formatEuro(cashState.closingOpenBalance || 0)}.</div>` : `<div class="status-box status-warn">Veranstaltung ist geöffnet.</div>`;
-  if (button) { button.disabled = !!cashState.closedAt; button.style.opacity = cashState.closedAt ? ".5" : "1"; }
+  if (button) { button.disabled = !!cashState.closedAt || mode !== "kasse"; button.style.opacity = button.disabled ? ".5" : "1"; }
 }
 
 function confirmCloseEvent() {
+  if (!ensureKasseMode()) return;
   if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   const a = getAccounting();
   openModal("Veranstaltung abschließen", `<p style="color:var(--text2);line-height:1.6;">Gezählter Endbestand: <strong style="color:var(--text)">${formatEuro(a.counted)}</strong><br>Sollbestand: <strong style="color:var(--text)">${formatEuro(a.expected)}</strong><br>Offenes Restguthaben: <strong style="color:var(--accent)">${formatEuro(a.open)}</strong><br><br>Nach dem Abschluss sind keine Aufladungen oder Warenverkäufe mehr möglich.</p>`, [
@@ -1123,6 +1159,7 @@ function confirmCloseEvent() {
 }
 
 async function closeEvent() {
+  if (!ensureKasseMode()) return;
   if (!ensureFirebaseReady()) return;
   const a = getAccounting();
   cashState.closedAt = Date.now();
@@ -1505,12 +1542,7 @@ function updatePinDots() {
 }
 function checkPin() {
   if (pinBuffer === PIN) {
-    mode = "kasse";
-    document.getElementById("pinOverlay").classList.add("hidden");
-    document.getElementById("mainNav").style.display = "flex";
-    refreshHeaderMode();
-    showScreen("kasse");
-    initFirebase();
+    setDeviceMode("kasse", true);
   } else {
     document.getElementById("pinError").textContent = "❌ Falscher PIN";
     pinBuffer = "";
@@ -1519,44 +1551,122 @@ function checkPin() {
   }
 }
 function switchToStand() {
-  mode = "stand";
+  setDeviceMode("stand", true);
+}
+function switchToView() {
+  setDeviceMode("view", true);
+}
+
+function setDeviceMode(nextMode, initialSetup = false) {
+  if (!["kasse", "stand", "view"].includes(nextMode)) return;
+  if (!initialSetup && !adminUnlocked && !deviceModeChangeAuthorized) { showToast("Zum Ändern der Geräteart ist die Verwaltungs-PIN erforderlich", "error"); return; }
+  deviceModeChangeAuthorized = false;
+  mode = nextMode;
+  localStorage.setItem("vk_device_mode", mode);
   document.getElementById("pinOverlay").classList.add("hidden");
-  document.getElementById("standNav").style.display = "flex";
+  document.getElementById("mainNav").style.display = mode === "kasse" ? "flex" : "none";
+  document.getElementById("standNav").style.display = mode === "stand" ? "flex" : "none";
+  document.getElementById("viewNav").style.display = mode === "view" ? "flex" : "none";
+  adminUnlocked = false;
+  adminPinBuffer = "";
+  updateAdminPinDots();
+  const locked = document.getElementById("adminLocked");
+  const content = document.getElementById("adminContent");
+  if (locked) locked.style.display = "block";
+  if (content) content.style.display = "none";
   refreshHeaderMode();
-  showScreen("stand");
+  showScreen(mode === "kasse" ? "kasse" : mode === "stand" ? "stand" : "log");
   buildProductGrid();
+  renderCashManagement();
   initFirebase();
+  if (!initialSetup) showToast("Geräteart wurde auf diesem Gerät geändert", "success");
+}
+
+function requestDeviceModeChange() {
+  deviceModeChangeAuthorized = false;
+  deviceChangePinBuffer = "";
+  openModal("Geräteart ändern", `<p style="color:var(--text2);margin-bottom:12px;">Zum Ändern bitte die vierstellige Verwaltungs-PIN über die Tasten eingeben.</p><div id="devicePinDisplay" style="text-align:center;font-family:var(--mono);font-size:24px;letter-spacing:8px;margin:16px 0;">○ ○ ○ ○</div><div class="pin-pad" style="margin:0 auto;">${[1,2,3,4,5,6,7,8,9].map(n => `<button class="pin-key" onclick="deviceModePin('${n}')">${n}</button>`).join("")}<button class="pin-key del" onclick="deviceModePin('del')">⌫</button><button class="pin-key" onclick="deviceModePin('0')">0</button><button class="pin-key" onclick="deviceModePin('ok')">✓</button></div>`, [{label:"Abbrechen", cls:"btn-secondary", fn:closeModal}]);
+}
+
+function deviceModePin(value) {
+  if (value === "del") deviceChangePinBuffer = deviceChangePinBuffer.slice(0, -1);
+  else if (value === "ok") {
+    if (deviceChangePinBuffer !== ADMIN_PIN || !auth || !auth.currentUser || !ADMIN_UIDS.includes(auth.currentUser.uid)) { deviceChangePinBuffer = ""; showToast("Verwaltungs-PIN ist nicht richtig", "error"); }
+    else { deviceModeChangeAuthorized = true; openModal("Geräteart auswählen", '<p style="color:var(--text2);">Diese Auswahl gilt nur für dieses Gerät.</p>', [{label:"Kasse / Verwaltung",cls:"btn-primary",fn:()=>{closeModal();setDeviceMode("kasse");}},{label:"Stand",cls:"btn-secondary",fn:()=>{closeModal();setDeviceMode("stand");}},{label:"Nur Auswertung",cls:"btn-secondary",fn:()=>{closeModal();setDeviceMode("view");}}]); return; }
+  }
+  else if (deviceChangePinBuffer.length < 4) deviceChangePinBuffer += value;
+  const display = document.getElementById("devicePinDisplay");
+  if (display) display.textContent = Array.from({length:4}, (_, i) => i < deviceChangePinBuffer.length ? "●" : "○").join(" ");
 }
 
 // ── Navigation ──
 function showScreen(name) {
+  const allowed = mode === "kasse" ? ["kasse","stand","log","auswertung","admin"] : mode === "stand" ? ["stand","log"] : ["log","auswertung"];
+  if (!allowed.includes(name)) { showToast("Diese Funktion ist auf diesem Gerät nicht freigegeben", "error"); return; }
+  const wasAdmin = document.getElementById("screen-admin").classList.contains("active");
+  if (wasAdmin && name !== "admin") lockAdmin();
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
-  const nb = document.getElementById("nav-" + name) || document.getElementById("nav-" + name + "2");
+  const suffix = mode === "stand" ? "2" : mode === "view" ? "3" : "";
+  const nb = document.getElementById("nav-" + name + suffix) || document.getElementById("nav-" + name);
   if (nb) nb.classList.add("active");
   if (name === "auswertung") renderStats();
 }
 
 function refreshHeaderMode() {
-  const label = mode === "stand" ? "🛒 Stand" : "💰 Kasse";
+  const label = mode === "stand" ? "🛒 Stand" : mode === "view" ? "📊 Auswertung" : "💰 Kasse / Verwaltung";
   document.getElementById("headerMode").textContent = label + (activeEventMeta.name ? " · " + activeEventMeta.name : "");
 }
 
 function openAdminScreen() {
+  if (mode !== "kasse") { showToast("Die Verwaltung ist auf diesem Gerät ausgeblendet", "error"); return; }
   showScreen("admin");
   if (adminUnlocked) renderAdmin();
 }
 
 function unlockAdmin() {
-  const input = document.getElementById("adminPinInput");
   if (!auth || !auth.currentUser || !ADMIN_UIDS.includes(auth.currentUser.uid)) { showToast("Dieses Firebase-Konto ist nicht für die Verwaltung freigeschaltet", "error"); return; }
-  if (!input || input.value !== ADMIN_PIN) { showToast("Verwaltungs-PIN ist nicht richtig", "error"); return; }
-  input.value = "";
+  if (adminPinBuffer !== ADMIN_PIN) { document.getElementById("adminPinError").textContent = "PIN ist nicht richtig"; adminPinBuffer = ""; updateAdminPinDots(); return; }
+  adminPinBuffer = "";
+  updateAdminPinDots();
   adminUnlocked = true;
   document.getElementById("adminLocked").style.display = "none";
   document.getElementById("adminContent").style.display = "block";
   renderAdmin();
+}
+
+function adminPinInput(digit) {
+  if (adminPinBuffer.length >= 4) return;
+  adminPinBuffer += digit;
+  updateAdminPinDots();
+  if (adminPinBuffer.length === 4) setTimeout(unlockAdmin, 120);
+}
+function adminPinDel() { adminPinBuffer = adminPinBuffer.slice(0, -1); updateAdminPinDots(); }
+function updateAdminPinDots() {
+  for (let i = 0; i < 4; i++) { const dot = document.getElementById("ad" + i); if (dot) dot.classList.toggle("filled", i < adminPinBuffer.length); }
+}
+function lockAdmin() {
+  adminUnlocked = false; adminPinBuffer = ""; updateAdminPinDots();
+  const locked = document.getElementById("adminLocked"); const content = document.getElementById("adminContent");
+  if (locked) locked.style.display = "block"; if (content) content.style.display = "none";
+}
+
+function ensureKasseMode() {
+  if (mode === "kasse") return true;
+  showToast("Kassenfunktionen sind auf diesem Gerät nicht freigegeben", "error");
+  return false;
+}
+function ensureSalesMode() {
+  if (mode === "kasse" || mode === "stand") return true;
+  showToast("Buchungen sind auf diesem Auswertungsgerät nicht freigegeben", "error");
+  return false;
+}
+
+function ensureAdminAccess() {
+  if (mode === "kasse" && adminUnlocked && auth && auth.currentUser && ADMIN_UIDS.includes(auth.currentUser.uid)) return true;
+  showToast("Diese Verwaltungsaktion ist nicht freigegeben", "error");
+  return false;
 }
 
 // ── Amount Selection (Multi-Select) ──
@@ -1587,6 +1697,7 @@ function toggleAmount(amt) {
 
 // ── QR Code Generation (Kasse) ──
 async function generateQR() {
+  if (!ensureKasseMode()) return;
   if (!ensureEventOpen()) return;
   if (!ensureFirebaseReady()) return;
   if (!selectedAmount || selectedAmount <= 0) {
@@ -1649,6 +1760,7 @@ function printQR() {
 
 // ── Kasse Scanner (Auszahlung / Aufladung) ──
 function startKasseScanner() {
+  if (!ensureKasseMode()) return;
   const wrap = document.getElementById("kasse-scanner-wrap");
   if (scannerRunning) { stopScanner("kasse"); return; }
   wrap.style.display = "block";
@@ -1662,6 +1774,7 @@ function startKasseScanner() {
 }
 
 async function handleKasseScan(raw) {
+  if (!ensureKasseMode()) return;
   let parsed;
   try { parsed = JSON.parse(raw); } catch { showToast("Ungültiger QR-Code", "error"); return; }
   const { tid, balance, eventId } = parsed;
@@ -1686,6 +1799,7 @@ async function handleKasseScan(raw) {
 }
 
 async function payoutBalance(tid, balance) {
+  if (!ensureKasseMode()) return;
   if (!ensureEventOpen()) return;
   if (balance <= 0) { showToast("Kein Guthaben vorhanden", "error"); return; }
   try {
@@ -1696,6 +1810,7 @@ async function payoutBalance(tid, balance) {
 }
 
 function reloadBalance(tid, balance) {
+  if (!ensureKasseMode()) return;
   if (!ensureEventOpen()) return;
   openModal("Guthaben aufladen",
     `<p style="color:var(--text2);margin-bottom:14px;">Aktuelles Guthaben: <strong style="color:var(--accent)">${formatEuro(balance)}</strong></p>
@@ -1717,6 +1832,7 @@ function reloadBalance(tid, balance) {
 
 // ── Stand Scanner ──
 function startStandScanner() {
+  if (!ensureSalesMode()) return;
   const btn = document.getElementById("scanBtn");
   const wrap = document.getElementById("stand-scanner-wrap");
   if (scannerRunning) { stopScanner("stand"); return; }
@@ -1893,6 +2009,7 @@ function renderOrder() {
 }
 
 async function confirmOrder() {
+  if (!ensureSalesMode()) return;
   if (!ensureEventOpen()) return;
   const items = Object.entries(order);
   if (items.length === 0 || !currentTid) return;
@@ -1932,6 +2049,7 @@ function remainingCorrectionItems(tx) {
 }
 
 function openCorrectionList() {
+  if (!ensureSalesMode()) return;
   if (!currentTid) { showToast("Bitte zuerst QR-Code scannen", "error"); return; }
   const purchases = transactions.filter(tx => tx.type === "purchase" && tx.tid === currentTid && remainingCorrectionItems(tx).length > 0);
   if (!purchases.length) { showToast("Für diesen QR-Code gibt es keinen korrigierbaren Verkauf", "info"); return; }
@@ -1995,6 +2113,7 @@ function prepareCorrection() {
 }
 
 async function confirmCorrection(requiresPin) {
+  if (!ensureSalesMode()) return;
   if (!selectedCorrectionTx || !currentTid) return;
   if (requiresPin) {
     const pin = document.getElementById("correctionPin").value;
@@ -2260,7 +2379,7 @@ function escapeHtml(value) {
 }
 
 async function renderAdmin() {
-  if (!adminUnlocked || !activeEventId) return;
+  if (!adminUnlocked || mode !== "kasse" || !activeEventId) return;
   const info = document.getElementById("activeEventAdminInfo");
   const eventClosed = !!cashState.closedAt;
   const readOnly = eventClosed ? "disabled" : "";
@@ -2273,7 +2392,7 @@ async function renderAdmin() {
     const isCurrent = id === activeEventId;
     const isClosed = meta.status === "closed" || (event.cashState && event.cashState.closedAt);
     const statusBadge = isClosed ? '<span style="font-size:11px;color:var(--text2);">✅ Abgeschlossen</span>' : '<span style="font-size:11px;color:var(--success);">● Aktiv</span>';
-    const action = isCurrent ? '<span class="badge badge-info">Auf diesem Gerät ausgewählt</span>' : `<button class="btn btn-secondary btn-sm" onclick="selectEvent('${id}')">${isClosed ? "Schreibgeschützt ansehen" : "Auf diesem Gerät öffnen"}</button>`;
+    const action = isCurrent ? '<span class="badge badge-info">Auf diesem Gerät ausgewählt</span>' : `<button class="btn btn-secondary btn-sm" onclick="selectEvent('${id}')">${isClosed ? "Schreibgeschützt ansehen" : "Auf diesem Gerät öffnen"}</button><button class="btn btn-danger btn-sm" style="margin-top:6px;" onclick="confirmDeleteEvent('${id}')">Endgültig löschen</button>`;
     return `<div class="order-item"><div><strong>${escapeHtml(meta.name || id)}</strong><br><span style="font-size:11px;color:var(--text2);">${escapeHtml(meta.date || "Ohne Datum")}</span><br>${statusBadge}</div><div style="max-width:190px;text-align:right;">${action}</div></div>`;
   }).join("");
   document.getElementById("eventArchiveList").innerHTML = rows || '<p style="color:var(--text2);">Noch keine Veranstaltungen.</p>';
@@ -2295,7 +2414,7 @@ function ensureCatalogEditable() {
 }
 
 async function saveEventMeta() {
-  if (!adminUnlocked) return;
+  if (!ensureAdminAccess()) return;
   if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   if (cashState.closedAt) { showToast("Name und Datum einer abgeschlossenen Veranstaltung sind geschützt", "error"); return; }
   const name = document.getElementById("editEventName").value.trim();
@@ -2306,7 +2425,7 @@ async function saveEventMeta() {
 }
 
 async function createNewEvent() {
-  if (!adminUnlocked || !ensureFirebaseReady()) return;
+  if (!ensureAdminAccess() || !ensureFirebaseReady()) return;
   if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   const name = document.getElementById("newEventName").value.trim();
   const date = document.getElementById("newEventDate").value;
@@ -2325,14 +2444,14 @@ async function createNewEvent() {
 }
 
 async function selectEvent(eventId) {
-  if (!adminUnlocked || eventId === activeEventId) return;
+  if (!ensureAdminAccess() || eventId === activeEventId) return;
   if (Object.keys(order).length > 0) { showToast("Bitte die offene Bestellung zuerst abschließen oder abbrechen", "error"); return; }
   await attachEventListeners(eventId);
   showToast("Veranstaltung auf diesem Gerät ausgewählt", "success");
 }
 
 async function saveAdminProduct(productId) {
-  if (!adminUnlocked || !ensureCatalogEditable()) return;
+  if (!ensureAdminAccess() || !ensureCatalogEditable()) return;
   const current = PRODUCTS.find(product => product.id === productId);
   if (!current) return;
   const name = document.getElementById("productName_" + productId).value.trim();
@@ -2344,7 +2463,7 @@ async function saveAdminProduct(productId) {
 }
 
 async function addAdminProduct() {
-  if (!adminUnlocked || !ensureCatalogEditable()) return;
+  if (!ensureAdminAccess() || !ensureCatalogEditable()) return;
   const name = document.getElementById("newProductName").value.trim();
   const price = Number(document.getElementById("newProductPrice").value);
   const emoji = document.getElementById("newProductEmoji").value.trim() || "📦";
@@ -2358,12 +2477,12 @@ async function addAdminProduct() {
 
 async function toggleAdminProduct(productId) {
   const product = PRODUCTS.find(entry => entry.id === productId);
-  if (!adminUnlocked || !product || !ensureCatalogEditable()) return;
+  if (!ensureAdminAccess() || !product || !ensureCatalogEditable()) return;
   await db.ref(eventPath("products/" + productId + "/active")).set(product.active === false);
 }
 
 async function moveAdminProduct(productId, direction) {
-  if (!adminUnlocked || !ensureCatalogEditable()) return;
+  if (!ensureAdminAccess() || !ensureCatalogEditable()) return;
   const sorted = [...PRODUCTS].sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0));
   const index = sorted.findIndex(product => product.id === productId);
   const otherIndex = index + direction;
@@ -2374,26 +2493,55 @@ async function moveAdminProduct(productId, direction) {
   await db.ref(eventPath("products")).update(updates);
 }
 
-// ── Reset ──
-function confirmReset() {
-  if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
-  if (cashState.closedAt) { showToast("Abgeschlossene Veranstaltungen sind schreibgeschützt", "error"); return; }
-  openModal("⚠ Alle Daten löschen",
-    '<p style="color:var(--text2);">Dieser Vorgang kann nicht rückgängig gemacht werden. Wirklich alle Transaktionen löschen?</p>',
-    [{label: "Ja, löschen", cls: "btn-danger", fn: async () => {
-      if (!ensureFirebaseReady()) return;
-      await db.ref(eventPath()).update({ transactions:null, cards:null, cashState:defaultCashState() });
-      transactions = [];
-      localStorage.removeItem("vk_transactions");
-      localStorage.removeItem("vk_cash_state");
-      cashState = defaultCashState();
-      renderLog(); renderStats();
-      renderCashManagement();
-      closeModal();
-      showToast("Alle Daten gelöscht", "info");
-    }},
-    {label: "Abbrechen", cls: "btn-secondary", fn: closeModal}]
-  );
+// ── Geschützte Datenbereinigung ──
+function confirmReset() { confirmTestReset(); }
+
+function confirmTestReset() {
+  if (!ensureAdminAccess() || !eventDataReady) return;
+  const eventName = activeEventMeta.name || activeEventId;
+  openModal("Testlauf zurücksetzen", `<p style="color:var(--text2);line-height:1.55;">Bei <strong style="color:var(--text)">${escapeHtml(eventName)}</strong> werden sämtliche Buchungen, QR-Codes, Kassenwerte und der Veranstaltungsabschluss gelöscht. Name, Datum und Produktkatalog bleiben erhalten.<br><br>Alle bisher ausgegebenen QR-Codes dieser Veranstaltung sind danach ungültig.</p>`, [
+    {label:"Testdaten jetzt löschen", cls:"btn-danger", fn:resetSelectedEventData},
+    {label:"Abbrechen", cls:"btn-secondary", fn:closeModal}
+  ]);
+}
+
+async function resetSelectedEventData() {
+  if (!ensureAdminAccess() || !ensureFirebaseReady()) return;
+  const now = Date.now();
+  await db.ref(eventPath()).update({ transactions:null, cards:null, cashState:defaultCashState(), "meta/status":"active", "meta/resetAt":now, "meta/updatedAt":now });
+  transactions = []; order = {}; currentTid = null; currentBalance = 0;
+  localStorage.removeItem("vk_transactions"); localStorage.removeItem("vk_cash_state");
+  cashState = defaultCashState();
+  const customer = document.getElementById("standCustomer"); if (customer) customer.style.display = "none";
+  renderLog(); renderStats(); renderCashManagement(); closeModal(); renderAdmin();
+  showToast("Testdaten wurden vollständig zurückgesetzt", "success");
+}
+
+async function confirmDeleteEvent(eventId) {
+  if (!ensureAdminAccess() || !ensureFirebaseReady() || eventId === activeEventId) return;
+  const snapshot = await db.ref("events/" + eventId + "/meta").once("value");
+  const meta = snapshot.val() || {};
+  const eventName = meta.name || eventId;
+  openModal("Veranstaltung endgültig löschen", `<p style="color:var(--text2);line-height:1.55;">Die Veranstaltung <strong style="color:var(--text)">${escapeHtml(eventName)}</strong> einschließlich aller Buchungen und QR-Codes wird unwiderruflich gelöscht.</p><div class="input-group" style="margin-top:14px;"><label class="input-label">Zur Bestätigung den Veranstaltungsnamen eingeben</label><input class="input" id="deleteEventConfirmation" autocomplete="off"></div>`, [
+    {label:"Endgültig löschen", cls:"btn-danger", fn:()=>deleteEventPermanently(eventId, eventName)},
+    {label:"Abbrechen", cls:"btn-secondary", fn:closeModal}
+  ]);
+}
+
+async function deleteEventPermanently(eventId, expectedName) {
+  if (!ensureAdminAccess() || !ensureFirebaseReady() || eventId === activeEventId) return;
+  const confirmation = document.getElementById("deleteEventConfirmation");
+  if (!confirmation || confirmation.value.trim() !== expectedName) { showToast("Der Veranstaltungsname stimmt nicht überein", "error"); return; }
+  const eventsSnapshot = await db.ref("events").once("value");
+  const events = eventsSnapshot.val() || {};
+  if (Object.keys(events).length <= 1) { showToast("Die letzte Veranstaltung kann nicht gelöscht werden", "error"); return; }
+  const defaultSnapshot = await db.ref("defaultEventId").once("value");
+  const updates = {};
+  updates["events/" + eventId] = null;
+  if (defaultSnapshot.val() === eventId) updates.defaultEventId = Object.keys(events).find(id => id !== eventId);
+  await db.ref().update(updates);
+  closeModal(); await renderAdmin();
+  showToast("Veranstaltung wurde endgültig gelöscht", "success");
 }
 
 // ── Scanner Helpers ──
@@ -2459,7 +2607,9 @@ function formatTime(ts) {
 window.onload = function() {
   buildProductGrid();
   renderCashManagement();
-  initFirebase();
+  const savedMode = localStorage.getItem("vk_device_mode");
+  if (["kasse", "stand", "view"].includes(savedMode)) setDeviceMode(savedMode, true);
+  else initFirebase();
 };
 </script>
 </body>
