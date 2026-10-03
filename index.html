@@ -818,6 +818,46 @@
     .modal { background:#fff; box-shadow:0 18px 60px rgba(0,0,0,.16); }
     .toast { color:var(--text); background:#fff; box-shadow:var(--shadow); white-space:normal; }
 
+    .cash-accordion { padding:0; overflow:hidden; }
+    .cash-accordion-toggle {
+      width:100%;
+      min-height:76px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:18px 22px;
+      border:0;
+      color:var(--text);
+      background:#fff;
+      text-align:left;
+      cursor:pointer;
+    }
+    .cash-accordion-title {
+      display:block;
+      color:var(--accent);
+      font-family:var(--mono);
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:1.5px;
+      text-transform:uppercase;
+    }
+    .cash-accordion-summary { display:block; margin-top:5px; color:var(--text2); font-size:14px; }
+    .cash-accordion-total { color:var(--accent); font-family:var(--mono); font-size:18px; font-weight:700; white-space:nowrap; }
+    .cash-accordion-chevron { display:inline-block; margin-left:8px; transition:transform .2s ease; }
+    .cash-accordion.open .cash-accordion-chevron { transform:rotate(180deg); }
+    .cash-accordion-body { display:none; padding:0 22px 22px; border-top:1px solid var(--border); }
+    .cash-accordion.open .cash-accordion-body { display:block; }
+    .cash-accordion-body > p { padding-top:18px; }
+
+    .admin-product-actions {
+      display:grid;
+      grid-template-columns:1.2fr 1.2fr .9fr 48px 48px;
+      gap:8px;
+      margin-top:8px;
+    }
+    .admin-product-actions .btn { width:100%; min-width:0; }
+
     @media (max-width:720px) {
       body { padding-bottom:76px; }
       .header { min-height:74px; padding:8px 13px; }
@@ -852,6 +892,19 @@
       .pin-logo { width:122px; height:122px; margin-bottom:12px; }
       .pin-pad { width:min(260px,100%); gap:9px; }
       .pin-key { padding:15px; }
+      .modal-overlay {
+        z-index:1000;
+        align-items:center;
+        padding:18px 16px calc(94px + env(safe-area-inset-bottom));
+      }
+      .modal { max-height:calc(100dvh - 132px); overflow-y:auto; }
+      .modal-actions { flex-direction:column; }
+      .modal-actions .btn { width:100%; min-height:52px; }
+      .admin-product-actions { grid-template-columns:1fr 1fr; }
+      .admin-product-actions .admin-delete { grid-column:1 / -1; }
+      .cash-accordion-toggle { min-height:72px; padding:16px 17px; }
+      .cash-accordion-body { padding:0 17px 17px; }
+      .cash-accordion-total { font-size:16px; }
     }
 
     @media (max-width:390px) {
@@ -875,7 +928,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03 · Tatami Light</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03b · Tatami Light</div>
   </div>
 </div>
 
@@ -954,12 +1007,16 @@
     <div class="connection-state"><span id="firebaseStatus"><strong>⏳ Firebase wird verbunden…</strong></span><button class="btn btn-secondary btn-sm" onclick="logoutFirebase()">Abmelden</button></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">Kassenbestand / Wechselgeld</div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Stückelungen für den Startbestand eintragen. Die Endzählung erfolgt beim Veranstaltungsabschluss.</p>
-    <div class="cash-grid" id="startCashGrid"></div>
-    <div class="cash-summary"><span>Startbestand Wechselgeld</span><strong id="startCashTotal">0,00 €</strong></div>
-    <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="applyRecommendedCash()">Empfehlung 390 € übernehmen</button>
+  <div class="card cash-accordion" id="cashAccordion">
+    <button type="button" class="cash-accordion-toggle" onclick="toggleCashAccordion()" aria-controls="cashAccordionBody" aria-expanded="true" id="cashAccordionToggle">
+      <span><span class="cash-accordion-title">Kassenbestand / Wechselgeld</span><span class="cash-accordion-summary" id="cashAccordionSummary">Startbestand einmalig festlegen</span></span>
+      <span class="cash-accordion-total"><span id="startCashTotal">0,00 €</span><span class="cash-accordion-chevron">⌃</span></span>
+    </button>
+    <div class="cash-accordion-body" id="cashAccordionBody">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Stückelungen für den Startbestand eintragen. Die Endzählung erfolgt beim Veranstaltungsabschluss.</p>
+      <div class="cash-grid" id="startCashGrid"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="applyRecommendedCash()">Empfehlung 390 € übernehmen</button>
+    </div>
   </div>
 
   <div class="card">
@@ -1262,6 +1319,7 @@ let deviceModeChangeAuthorized = false;
 let scannerKasse = null;
 let scannerStand = null;
 let scannerRunning = false;
+let cashAccordionOpen = null;
 const CASH_DENOMINATIONS = [0.50, 1, 2, 5, 10, 20, 50, 100];
 let cashState = loadCashState();
 
@@ -1279,7 +1337,7 @@ function productsAsFirebaseObject(products = PRODUCTS) {
 }
 
 function defaultCashState() {
-  return { startCounts: {}, endCounts: {}, closedAt: null, closingOpenBalance: null };
+  return { startCounts: {}, endCounts: {}, startConfigured: false, closedAt: null, closingOpenBalance: null };
 }
 
 function loadCashState() {
@@ -1313,6 +1371,7 @@ function buildCashGrid(containerId, kind) {
     row.innerHTML = `<label>${formatEuro(denomination)} × Anzahl</label><input type="number" min="0" step="1" inputmode="numeric" value="${Number(counts[key]) || 0}" ${cashState.closedAt || !eventDataReady || mode !== "kasse" ? "disabled" : ""}>`;
     row.querySelector("input").addEventListener("input", event => {
       counts[key] = Math.max(0, parseInt(event.target.value, 10) || 0);
+      if (kind === "start") { cashState.startConfigured = cashTotal(cashState.startCounts) > 0; cashAccordionOpen = true; }
       localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
       renderCashTotals();
     });
@@ -1328,7 +1387,28 @@ function renderCashTotals() {
   const end = document.getElementById("endCashTotal");
   if (start) start.textContent = formatEuro(cashTotal(cashState.startCounts));
   if (end) end.textContent = formatEuro(cashTotal(cashState.endCounts));
+  const summary = document.getElementById("cashAccordionSummary");
+  if (summary) summary.textContent = isStartCashConfigured() ? "Startbestand festgelegt · zum Bearbeiten öffnen" : "Startbestand einmalig festlegen";
   renderCashAccounting();
+}
+
+function isStartCashConfigured() {
+  return cashState.startConfigured === true || cashTotal(cashState.startCounts) > 0;
+}
+
+function renderCashAccordion() {
+  const accordion = document.getElementById("cashAccordion");
+  const toggle = document.getElementById("cashAccordionToggle");
+  if (!accordion || !toggle) return;
+  const open = cashAccordionOpen == null ? !isStartCashConfigured() : cashAccordionOpen;
+  accordion.classList.toggle("open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+}
+
+function toggleCashAccordion() {
+  const accordion = document.getElementById("cashAccordion");
+  cashAccordionOpen = accordion ? !accordion.classList.contains("open") : true;
+  renderCashAccordion();
 }
 
 function applyRecommendedCash() {
@@ -1336,6 +1416,8 @@ function applyRecommendedCash() {
   if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return; }
   if (cashState.closedAt) return;
   cashState.startCounts = { "0_5":20, "1":10, "2":10, "5":12, "10":15, "20":7, "50":0, "100":0 };
+  cashState.startConfigured = true;
+  cashAccordionOpen = true;
   saveCashState();
   showToast("Empfohlener Startbestand übernommen", "success");
 }
@@ -1372,6 +1454,7 @@ function renderCashManagement() {
   buildCashGrid("startCashGrid", "start");
   buildCashGrid("endCashGrid", "end");
   renderCashTotals();
+  renderCashAccordion();
   const status = document.getElementById("eventCloseStatus");
   const button = document.getElementById("closeEventBtn");
   if (status) status.innerHTML = cashState.closedAt ? `<div class="status-box status-ok">Abgeschlossen am ${formatDate(cashState.closedAt)} um ${formatTime(cashState.closedAt)}. Festgehaltenes offenes Restguthaben: ${formatEuro(cashState.closingOpenBalance || 0)}.</div>` : `<div class="status-box status-warn">Veranstaltung ist geöffnet.</div>`;
@@ -1486,7 +1569,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-01b`;
+  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03b`;
 }
 
 async function startFirebaseListeners() {
@@ -1531,6 +1614,7 @@ async function ensureEventStructure() {
   if (txSnap.exists()) updates["events/" + eventId + "/transactions"] = txSnap.val();
   await db.ref().update(updates);
   activeEventId = eventId;
+  cashAccordionOpen = null;
   localStorage.setItem("vk_selected_event_id", activeEventId);
 }
 
@@ -1538,6 +1622,7 @@ async function attachEventListeners(eventId) {
   if (!eventId) return;
   eventListenerPaths.forEach(path => db.ref(path).off());
   activeEventId = eventId;
+  cashAccordionOpen = null;
   localStorage.setItem("vk_selected_event_id", eventId);
   eventDataReady = false;
   activeEventMeta = { name:"Veranstaltung wird geladen…", date:"", status:"loading" };
@@ -2633,7 +2718,7 @@ function renderAdminProducts() {
   const container = document.getElementById("adminProductList");
   if (!container) return;
   const sorted = [...PRODUCTS].sort((a,b) => (a.sortIndex || 0) - (b.sortIndex || 0));
-  container.innerHTML = sorted.map((product, index) => `<div class="card" style="padding:12px;margin-bottom:10px;opacity:${product.active === false ? ".55" : "1"};"><div class="flex-row"><input class="input" style="width:66px;" id="productEmoji_${product.id}" value="${escapeHtml(product.emoji || "📦")}" maxlength="4"><input class="input" style="flex:1;" id="productName_${product.id}" value="${escapeHtml(product.name)}"><input type="number" min="0" step="0.10" class="input" style="width:105px;" id="productPrice_${product.id}" value="${Number(product.price).toFixed(2)}"></div><div class="flex-row" style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="saveAdminProduct('${product.id}')">Speichern</button><button class="btn btn-secondary btn-sm" onclick="toggleAdminProduct('${product.id}')">${product.active === false ? "Aktivieren" : "Deaktivieren"}</button><button class="btn btn-secondary btn-sm" ${index === 0 ? "disabled" : ""} onclick="moveAdminProduct('${product.id}',-1)">↑</button><button class="btn btn-secondary btn-sm" ${index === sorted.length - 1 ? "disabled" : ""} onclick="moveAdminProduct('${product.id}',1)">↓</button></div></div>`).join("");
+  container.innerHTML = sorted.map((product, index) => `<div class="card" style="padding:12px;margin-bottom:10px;opacity:${product.active === false ? ".55" : "1"};"><div class="flex-row"><input class="input" style="width:66px;" id="productEmoji_${product.id}" value="${escapeHtml(product.emoji || "📦")}" maxlength="4"><input class="input" style="flex:1;" id="productName_${product.id}" value="${escapeHtml(product.name)}"><input type="number" min="0" step="0.10" class="input" style="width:105px;" id="productPrice_${product.id}" value="${Number(product.price).toFixed(2)}"></div><div class="admin-product-actions"><button class="btn btn-primary btn-sm" onclick="saveAdminProduct('${product.id}')">Speichern</button><button class="btn btn-secondary btn-sm" onclick="toggleAdminProduct('${product.id}')">${product.active === false ? "Aktivieren" : "Deaktivieren"}</button><button class="btn btn-danger btn-sm admin-delete" onclick="requestDeleteAdminProduct('${product.id}')">Löschen</button><button class="btn btn-secondary btn-sm" aria-label="Produkt nach oben verschieben" ${index === 0 ? "disabled" : ""} onclick="moveAdminProduct('${product.id}',-1)">↑</button><button class="btn btn-secondary btn-sm" aria-label="Produkt nach unten verschieben" ${index === sorted.length - 1 ? "disabled" : ""} onclick="moveAdminProduct('${product.id}',1)">↓</button></div></div>`).join("");
 }
 
 function ensureCatalogEditable() {
@@ -2709,6 +2794,48 @@ async function toggleAdminProduct(productId) {
   const product = PRODUCTS.find(entry => entry.id === productId);
   if (!ensureAdminAccess() || !product || !ensureCatalogEditable()) return;
   await db.ref(eventPath("products/" + productId + "/active")).set(product.active === false);
+}
+
+function transactionContainsProduct(transaction, product) {
+  return (transaction && Array.isArray(transaction.items) ? transaction.items : []).some(item => item && (item.id === product.id || (!item.id && item.name === product.name)));
+}
+
+async function productHasBookings(product) {
+  const snapshot = await db.ref(eventPath("transactions")).once("value");
+  const entries = snapshot.val() || {};
+  return Object.values(entries).some(transaction => transactionContainsProduct(transaction, product));
+}
+
+async function requestDeleteAdminProduct(productId) {
+  if (!ensureAdminAccess() || !ensureCatalogEditable() || !ensureFirebaseReady()) return;
+  const product = PRODUCTS.find(entry => entry.id === productId);
+  if (!product) return;
+  try {
+    if (await productHasBookings(product)) {
+      showToast("Dieses Produkt wurde bereits gebucht und kann nur deaktiviert werden", "error");
+      return;
+    }
+    openModal("Produkt löschen", `<p style="color:var(--text2);line-height:1.55;"><strong style="color:var(--text)">${escapeHtml(product.emoji || "📦")} ${escapeHtml(product.name)}</strong> wurde in dieser Veranstaltung noch nie gebucht und kann vollständig aus dem Produktkatalog entfernt werden.<br><br>Dieser Schritt kann nicht rückgängig gemacht werden.</p>`, [
+      { label:"Produkt endgültig löschen", cls:"btn-danger", fn:() => deleteAdminProduct(productId) },
+      { label:"Abbrechen", cls:"btn-secondary", fn:closeModal }
+    ]);
+  } catch (error) { showToast("Die Produktverwendung konnte nicht geprüft werden", "error"); }
+}
+
+async function deleteAdminProduct(productId) {
+  if (!ensureAdminAccess() || !ensureCatalogEditable() || !ensureFirebaseReady()) return;
+  const product = PRODUCTS.find(entry => entry.id === productId);
+  if (!product) { closeModal(); return; }
+  try {
+    if (await productHasBookings(product)) {
+      closeModal();
+      showToast("Das Produkt wurde inzwischen gebucht und kann nicht mehr gelöscht werden", "error");
+      return;
+    }
+    await db.ref(eventPath("products/" + productId)).remove();
+    closeModal();
+    showToast("Produkt wurde gelöscht", "success");
+  } catch (error) { showToast("Produkt konnte nicht gelöscht werden", "error"); }
 }
 
 async function moveAdminProduct(productId, direction) {
