@@ -426,6 +426,86 @@
     .tx-amount.credit { color: var(--success); }
     .tx-amount.payout { color: var(--accent); }
 
+    /* ── QR-GUTHABENVERLAUF AN DER KASSE ── */
+    .kasse-balance-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .kasse-balance-stat {
+      padding: 10px 11px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface2);
+    }
+    .kasse-balance-stat span {
+      display: block;
+      color: var(--text2);
+      font-size: 10px;
+      line-height: 1.3;
+      margin-bottom: 3px;
+    }
+    .kasse-balance-stat strong {
+      display: block;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+    .kasse-balance-stat.current {
+      border-color: var(--accent);
+      background: rgba(181,47,39,0.06);
+    }
+    .kasse-balance-stat.current strong { color: var(--accent); }
+    .kasse-history-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 4px 0 12px;
+      padding: 11px 13px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .kasse-history-toggle .history-chevron {
+      color: var(--accent);
+      font-size: 18px;
+      transition: transform .2s ease;
+    }
+    .kasse-history-toggle[aria-expanded="true"] .history-chevron { transform: rotate(180deg); }
+    .kasse-history-panel {
+      display: none;
+      margin: -2px 0 14px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface2);
+      max-height: 330px;
+      overflow-y: auto;
+    }
+    .kasse-history-panel.open { display: block; }
+    .kasse-history-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .kasse-history-row:last-child { border-bottom: none; }
+    .kasse-history-title { font-size: 13px; font-weight: 700; color: var(--text); }
+    .kasse-history-meta { font-size: 10px; color: var(--text2); margin-top: 2px; }
+    .kasse-history-items { font-size: 11px; color: var(--text2); margin-top: 4px; line-height: 1.4; }
+    .kasse-history-values { text-align: right; white-space: nowrap; }
+    .kasse-history-amount { display: block; font-family: var(--mono); font-size: 13px; font-weight: 700; }
+    .kasse-history-amount.credit { color: var(--success); }
+    .kasse-history-amount.debit { color: var(--danger); }
+    .kasse-history-balance { display: block; color: var(--text2); font-size: 10px; margin-top: 4px; }
+
     /* ── TOAST ── */
     .toast {
       position: fixed;
@@ -987,7 +1067,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03d · Tatami Light</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03e · Tatami Light</div>
   </div>
 </div>
 
@@ -1646,7 +1726,7 @@ function updateFirebaseStatus() {
   if (status) {
     if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
     else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03d`;
+    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03e`;
   }
   if (notice) notice.classList.toggle("status-error", !online);
   if (headerConnection) {
@@ -2177,6 +2257,85 @@ function startKasseScanner() {
   ).then(() => scannerRunning = true).catch(e => showToast("Kamera: " + e, "error"));
 }
 
+async function getCardTransactions(tid) {
+  const normalizedTid = String(tid || "").trim();
+  if (!normalizedTid) return [];
+  try {
+    const snapshot = await db.ref(eventPath("transactions")).orderByChild("tid").equalTo(normalizedTid).once("value");
+    const data = snapshot.val() || {};
+    return Object.entries(data)
+      .map(([id, tx]) => Object.assign({ id }, tx))
+      .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+  } catch (error) {
+    console.warn("QR-Guthabenverlauf konnte nicht separat geladen werden:", error);
+    return transactions
+      .filter(tx => tx.tid === normalizedTid)
+      .slice()
+      .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+  }
+}
+
+function buildCardHistoryModel(history, fallbackInitial, realBalance) {
+  let runningBalance = 0;
+  let loaded = 0;
+  let purchases = 0;
+  let corrections = 0;
+  let payouts = 0;
+  const rows = history.map(tx => {
+    const amount = Math.max(0, Number(tx.amount) || 0);
+    const isCredit = tx.type === "load" || tx.type === "correction";
+    if (tx.type === "load") loaded += amount;
+    else if (tx.type === "purchase") purchases += amount;
+    else if (tx.type === "correction") corrections += amount;
+    else if (tx.type === "payout") payouts += amount;
+    runningBalance += isCredit ? amount : -amount;
+    runningBalance = Math.max(0, Math.round(runningBalance * 100) / 100);
+    return Object.assign({}, tx, { amount, isCredit, balanceAfter:runningBalance });
+  });
+  if (!loaded && Number(fallbackInitial) > 0) loaded = Number(fallbackInitial);
+  return {
+    rows,
+    loaded:Math.round(loaded * 100) / 100,
+    consumed:Math.max(0, Math.round((purchases - corrections) * 100) / 100),
+    payouts:Math.round(payouts * 100) / 100,
+    balance:Math.max(0, Number(realBalance) || 0)
+  };
+}
+
+function cardHistoryRowsHtml(rows) {
+  if (!rows.length) return '<p style="padding:14px 0;color:var(--text2);font-size:12px;">Für diesen QR-Code sind noch keine einzelnen Vorgänge verfügbar.</p>';
+  const labels = { load:"Aufladung", purchase:"Kauf", correction:"Korrektur / Gutschrift", payout:"Auszahlung" };
+  return rows.map(tx => {
+    const items = (tx.items || []).map(item => `${escapeHtml(item.name || "Produkt")} × ${Number(item.qty) || 0}`).join(", ");
+    const sign = tx.isCredit ? "+" : "−";
+    const amountClass = tx.isCredit ? "credit" : "debit";
+    const time = tx.timeStr || formatTime(tx.timestamp);
+    const date = tx.dateStr || formatDate(tx.timestamp);
+    return `<div class="kasse-history-row">
+      <div>
+        <div class="kasse-history-title">${escapeHtml(labels[tx.type] || "Vorgang")}</div>
+        <div class="kasse-history-meta">${escapeHtml(date)} · ${escapeHtml(time)}</div>
+        ${items ? `<div class="kasse-history-items">${items}</div>` : ""}
+      </div>
+      <div class="kasse-history-values">
+        <span class="kasse-history-amount ${amountClass}">${sign}${formatEuro(tx.amount)}</span>
+        <span class="kasse-history-balance">Stand ${formatEuro(tx.balanceAfter)}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleKasseHistory() {
+  const button = document.getElementById("kasseHistoryButton");
+  const panel = document.getElementById("kasseHistoryPanel");
+  if (!button || !panel) return;
+  const open = !panel.classList.contains("open");
+  panel.classList.toggle("open", open);
+  button.setAttribute("aria-expanded", String(open));
+  const label = button.querySelector(".history-toggle-label");
+  if (label) label.textContent = open ? "Guthabenverlauf ausblenden" : "Guthabenverlauf anzeigen";
+}
+
 async function handleKasseScan(raw) {
   if (!ensureKasseMode()) return;
   let parsed;
@@ -2187,6 +2346,8 @@ async function handleKasseScan(raw) {
   let realBalance;
   try { realBalance = await getServerCardBalance(tid); }
   catch (error) { showToast(error.message === "card-not-found" ? "QR-Code " + (error.tid || tid) + " ist nicht in Firebase vorhanden" : firebaseErrorText(error, "Guthaben konnte nicht geladen werden"), "error"); return; }
+  const history = await getCardTransactions(tid);
+  const historyModel = buildCardHistoryModel(history, balance, realBalance);
   const res = document.getElementById("kasseResult");
   res.style.display = "block";
   res.innerHTML = `
@@ -2194,8 +2355,16 @@ async function handleKasseScan(raw) {
       <span class="badge badge-info">${tid}</span>
       <span style="float:right;font-family:var(--mono);font-size:18px;color:var(--accent);">${formatEuro(realBalance)}</span>
     </div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:6px;">Ursprüngliches Guthaben: <strong style="color:var(--text2)">${formatEuro(balance)}</strong></p>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Aktuelles Restguthaben: <strong style="color:var(--accent)">${formatEuro(realBalance)}</strong></p>
+    <div class="kasse-balance-summary">
+      <div class="kasse-balance-stat"><span>Aufgeladen insgesamt</span><strong>${formatEuro(historyModel.loaded)}</strong></div>
+      <div class="kasse-balance-stat"><span>Warenverbrauch netto</span><strong>${formatEuro(historyModel.consumed)}</strong></div>
+      <div class="kasse-balance-stat"><span>Bereits ausgezahlt</span><strong>${formatEuro(historyModel.payouts)}</strong></div>
+      <div class="kasse-balance-stat current"><span>Aktuelles Restguthaben</span><strong>${formatEuro(realBalance)}</strong></div>
+    </div>
+    <button type="button" class="kasse-history-toggle" id="kasseHistoryButton" aria-expanded="false" aria-controls="kasseHistoryPanel" onclick="toggleKasseHistory()">
+      <span class="history-toggle-label">Guthabenverlauf anzeigen</span><span class="history-chevron">⌄</span>
+    </button>
+    <div class="kasse-history-panel" id="kasseHistoryPanel">${cardHistoryRowsHtml(historyModel.rows)}</div>
     <div class="flex-row">
       <button class="btn btn-success btn-sm" onclick="payoutBalance('${tid}',${realBalance})">💵 Auszahlen</button>
       <button class="btn btn-secondary btn-sm" onclick="reloadBalance('${tid}',${realBalance})">➕ Aufladen</button>
