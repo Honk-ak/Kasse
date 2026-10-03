@@ -695,6 +695,26 @@
       text-transform:uppercase;
     }
     .header-copy strong { display:block; font-size:19px; line-height:1.15; white-space:nowrap; }
+    .header-controls { display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }
+    .header-connection {
+      min-height:38px;
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      padding:7px 10px;
+      color:var(--text2);
+      background:var(--surface2);
+      border:1px solid var(--border);
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .header-connection-dot { width:10px; height:10px; flex:0 0 10px; border-radius:50%; background:#c58b24; box-shadow:0 0 0 3px rgba(197,139,36,.12); }
+    .header-connection.online { color:var(--success); background:var(--success-soft); border-color:#b9ddc9; }
+    .header-connection.online .header-connection-dot { background:var(--success); box-shadow:0 0 0 3px rgba(23,107,66,.12); }
+    .header-connection.offline { color:var(--danger); background:#fbe9e7; border-color:#e8b5b1; }
+    .header-connection.offline .header-connection-dot { background:var(--danger); box-shadow:0 0 0 3px rgba(142,33,28,.12); }
     .header-mode {
       min-height: 38px;
       padding: 7px 12px;
@@ -786,6 +806,19 @@
     .cash-summary strong, .stat-value, .balance-amount, .order-total-amount, .tx-tid { color:var(--accent); }
     .config-notice { background:var(--success-soft); border-color:#b9ddc9; color:#115b37; }
     .config-notice strong { color:var(--success); }
+    .config-notice.status-error { color:var(--danger); background:#fbe9e7; border-color:#e8b5b1; }
+    .config-notice.status-error strong { color:var(--danger); }
+    .connection-warning {
+      margin-bottom:18px;
+      padding:15px 17px;
+      color:var(--danger);
+      background:#fbe9e7;
+      border:2px solid #e8b5b1;
+      border-radius:14px;
+      line-height:1.45;
+    }
+    .connection-warning strong { display:block; margin-bottom:3px; }
+    .connection-warning[hidden] { display:none; }
     .badge-success { background:var(--success-soft); }
     .badge-danger { background:#fbe9e7; }
     .badge-info { background:var(--brand-soft); color:var(--accent); }
@@ -886,6 +919,9 @@
       .header-brand-logo { width:54px; height:54px; flex-basis:54px; border-radius:8px; }
       .header-copy small { display:none; }
       .header-copy strong { max-width:140px; overflow:hidden; text-overflow:ellipsis; font-size:16px; }
+      .header-controls { gap:6px; }
+      .header-connection { width:34px; min-height:34px; justify-content:center; padding:0; }
+      .header-connection-label { display:none; }
       .header-mode { max-width:152px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .nav {
         position:fixed;
@@ -933,7 +969,7 @@
     @media (max-width:390px) {
       .header-brand-logo { width:48px; height:48px; flex-basis:48px; }
       .header-copy strong { max-width:112px; font-size:15px; }
-      .header-mode { max-width:132px; font-size:10px; }
+      .header-mode { max-width:118px; font-size:10px; }
       .auth-logo { width:112px; height:112px; }
       .pin-logo { width:108px; height:108px; }
     }
@@ -951,7 +987,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03c · Tatami Light</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03d · Tatami Light</div>
   </div>
 </div>
 
@@ -991,7 +1027,10 @@
     <img class="header-brand-logo" src="svf-budo-logo-split-u-v3.png" alt="SVF-BUDO">
     <div class="header-copy"><small>SV Fellbach · Budo</small><strong>Veranstaltungskasse</strong></div>
   </div>
-  <button class="header-mode" id="headerMode" onclick="requestDeviceModeChange()" style="cursor:pointer;border:1px solid var(--border);">Wird geladen…</button>
+  <div class="header-controls">
+    <span class="header-connection" id="headerConnection" role="status" aria-live="polite" title="Firebase-Verbindung wird geprüft"><span class="header-connection-dot"></span><span class="header-connection-label" id="headerConnectionLabel">Prüfen…</span></span>
+    <button class="header-mode" id="headerMode" onclick="requestDeviceModeChange()" style="cursor:pointer;border:1px solid var(--border);">Wird geladen…</button>
+  </div>
 </div>
 
 <!-- NAV -->
@@ -1026,9 +1065,7 @@
 <!-- ═══════════ KASSE SCREEN ═══════════ -->
 <div class="screen active" id="screen-kasse">
 
-  <div class="config-notice" id="firebaseNotice">
-    <div class="connection-state"><span id="firebaseStatus"><strong>⏳ Firebase wird verbunden…</strong></span><button class="btn btn-secondary btn-sm" onclick="logoutFirebase()">Abmelden</button></div>
-  </div>
+  <div class="connection-warning" id="connectionWarningKasse" hidden><strong>⚠️ Keine Firebase-Verbindung</strong><span>Aufladungen, Auszahlungen und QR-Code-Erstellung sind vorübergehend gesperrt.</span></div>
 
   <div class="card cash-accordion" id="cashAccordion">
     <button type="button" class="cash-accordion-toggle" onclick="toggleCashAccordion()" aria-controls="cashAccordionBody" aria-expanded="true" id="cashAccordionToggle">
@@ -1089,6 +1126,8 @@
 
 <!-- ═══════════ STAND SCREEN ═══════════ -->
 <div class="screen" id="screen-stand">
+
+  <div class="connection-warning" id="connectionWarningStand" hidden><strong>⚠️ Keine Firebase-Verbindung</strong><span>Verkäufe können erst wieder gebucht werden, wenn die Verbindung hergestellt ist.</span></div>
 
   <!-- Scan -->
   <div class="card" id="standScanCard">
@@ -1226,6 +1265,13 @@
   </div>
 
   <div id="adminContent" style="display:none;">
+    <div class="card">
+      <div class="card-title">Systemstatus / Firebase</div>
+      <div class="config-notice" id="firebaseNotice" style="margin-bottom:0;">
+        <div class="connection-state"><span id="firebaseStatus"><strong>⏳ Firebase wird verbunden…</strong></span><button class="btn btn-secondary btn-sm" onclick="logoutFirebase()">Abmelden</button></div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-title">Auf diesem Gerät ausgewählte Veranstaltung</div>
       <div id="activeEventAdminInfo"></div>
@@ -1591,10 +1637,28 @@ async function logoutFirebase() {
 
 function updateFirebaseStatus() {
   const status = document.getElementById("firebaseStatus");
-  if (!status) return;
-  if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
-  else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03c`;
+  const notice = document.getElementById("firebaseNotice");
+  const headerConnection = document.getElementById("headerConnection");
+  const headerConnectionLabel = document.getElementById("headerConnectionLabel");
+  const warningKasse = document.getElementById("connectionWarningKasse");
+  const warningStand = document.getElementById("connectionWarningStand");
+  const online = firebaseOk && firebaseConnected;
+  if (status) {
+    if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
+    else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
+    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03d`;
+  }
+  if (notice) notice.classList.toggle("status-error", !online);
+  if (headerConnection) {
+    headerConnection.classList.toggle("online", online);
+    headerConnection.classList.toggle("offline", !online);
+    const connectionText = online ? "Online" : firebaseOk ? "Offline" : "Nicht angemeldet";
+    headerConnection.title = online ? "Firebase verbunden" : firebaseOk ? "Firebase-Verbindung unterbrochen" : "Firebase-Anmeldung erforderlich";
+    headerConnection.setAttribute("aria-label", connectionText);
+    if (headerConnectionLabel) headerConnectionLabel.textContent = connectionText;
+  }
+  if (warningKasse) warningKasse.hidden = online;
+  if (warningStand) warningStand.hidden = online;
 }
 
 async function startFirebaseListeners() {
