@@ -431,7 +431,7 @@
       position: fixed;
       bottom: 24px;
       left: 50%;
-      transform: translateX(-50%) translateY(100px);
+      transform: translateX(-50%) translateY(calc(100% + 140px));
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -439,12 +439,15 @@
       font-size: 14px;
       font-weight: 500;
       z-index: 9999;
-      transition: transform 0.3s ease;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: transform 0.3s ease, opacity 0.2s ease, visibility 0s linear 0.3s;
       max-width: 320px;
       text-align: center;
       white-space: nowrap;
     }
-    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity:1; visibility:visible; transition-delay:0s; }
     .toast.success { border-color: var(--success); color: var(--success); }
     .toast.error { border-color: var(--danger); color: var(--danger); }
     .toast.info { border-color: var(--accent2); color: var(--accent2); }
@@ -843,8 +846,25 @@
       text-transform:uppercase;
     }
     .cash-accordion-summary { display:block; margin-top:5px; color:var(--text2); font-size:14px; }
+    .cash-accordion-side { display:flex; align-items:center; justify-content:flex-end; gap:12px; }
     .cash-accordion-total { color:var(--accent); font-family:var(--mono); font-size:18px; font-weight:700; white-space:nowrap; }
-    .cash-accordion-chevron { display:inline-block; margin-left:8px; transition:transform .2s ease; }
+    .cash-accordion-action {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      min-height:38px;
+      padding:7px 11px;
+      color:var(--accent);
+      background:var(--brand-soft);
+      border:2px solid rgba(181,47,39,.38);
+      border-radius:999px;
+      font-family:var(--sans);
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .cash-accordion-chevron { display:inline-block; font-size:18px; line-height:1; transition:transform .2s ease; }
     .cash-accordion.open .cash-accordion-chevron { transform:rotate(180deg); }
     .cash-accordion-body { display:none; padding:0 22px 22px; border-top:1px solid var(--border); }
     .cash-accordion.open .cash-accordion-body { display:block; }
@@ -860,6 +880,7 @@
 
     @media (max-width:720px) {
       body { padding-bottom:76px; }
+      .toast { bottom:calc(86px + env(safe-area-inset-bottom)); width:calc(100% - 32px); max-width:420px; }
       .header { min-height:74px; padding:8px 13px; }
       .header-brand { gap:9px; }
       .header-brand-logo { width:54px; height:54px; flex-basis:54px; border-radius:8px; }
@@ -904,7 +925,9 @@
       .admin-product-actions .admin-delete { grid-column:1 / -1; }
       .cash-accordion-toggle { min-height:72px; padding:16px 17px; }
       .cash-accordion-body { padding:0 17px 17px; }
-      .cash-accordion-total { font-size:16px; }
+      .cash-accordion-side { flex-direction:column; align-items:flex-end; gap:7px; }
+      .cash-accordion-total { font-size:17px; }
+      .cash-accordion-action { min-height:40px; padding:7px 12px; }
     }
 
     @media (max-width:390px) {
@@ -928,7 +951,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03b · Tatami Light</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03c · Tatami Light</div>
   </div>
 </div>
 
@@ -1010,7 +1033,7 @@
   <div class="card cash-accordion" id="cashAccordion">
     <button type="button" class="cash-accordion-toggle" onclick="toggleCashAccordion()" aria-controls="cashAccordionBody" aria-expanded="true" id="cashAccordionToggle">
       <span><span class="cash-accordion-title">Kassenbestand / Wechselgeld</span><span class="cash-accordion-summary" id="cashAccordionSummary">Startbestand einmalig festlegen</span></span>
-      <span class="cash-accordion-total"><span id="startCashTotal">0,00 €</span><span class="cash-accordion-chevron">⌃</span></span>
+      <span class="cash-accordion-side"><span class="cash-accordion-total" id="startCashTotal">0,00 €</span><span class="cash-accordion-action"><span id="cashAccordionActionLabel">Details anzeigen</span><span class="cash-accordion-chevron" aria-hidden="true">⌄</span></span></span>
     </button>
     <div class="cash-accordion-body" id="cashAccordionBody">
       <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Stückelungen für den Startbestand eintragen. Die Endzählung erfolgt beim Veranstaltungsabschluss.</p>
@@ -1399,10 +1422,12 @@ function isStartCashConfigured() {
 function renderCashAccordion() {
   const accordion = document.getElementById("cashAccordion");
   const toggle = document.getElementById("cashAccordionToggle");
+  const actionLabel = document.getElementById("cashAccordionActionLabel");
   if (!accordion || !toggle) return;
   const open = cashAccordionOpen == null ? !isStartCashConfigured() : cashAccordionOpen;
   accordion.classList.toggle("open", open);
   toggle.setAttribute("aria-expanded", String(open));
+  if (actionLabel) actionLabel.textContent = open ? "Details schließen" : "Details anzeigen";
 }
 
 function toggleCashAccordion() {
@@ -1569,7 +1594,7 @@ function updateFirebaseStatus() {
   if (!status) return;
   if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
   else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03b`;
+  else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03c`;
 }
 
 async function startFirebaseListeners() {
