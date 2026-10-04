@@ -1053,6 +1053,183 @@
       .auth-logo { width:112px; height:112px; }
       .pin-logo { width:108px; height:108px; }
     }
+
+    /* ── WILLKOMMEN & HILFE ── */
+    .header-help {
+      width:40px;
+      height:40px;
+      flex:0 0 40px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--accent);
+      background:#fff;
+      border:2px solid var(--accent);
+      border-radius:50%;
+      font-size:21px;
+      font-weight:900;
+      line-height:1;
+      cursor:pointer;
+      box-shadow:0 3px 10px rgba(142,33,28,.10);
+    }
+    .header-help:active { transform:scale(.96); }
+
+    .welcome-overlay {
+      position:fixed;
+      inset:0;
+      z-index:650;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      background:rgba(35,30,27,.64);
+      backdrop-filter:blur(7px);
+    }
+    .welcome-overlay.hidden { display:none; }
+    .welcome-card {
+      width:min(100%, 560px);
+      max-height:calc(100dvh - 40px);
+      overflow:auto;
+      padding:30px;
+      color:var(--text);
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:24px;
+      box-shadow:0 24px 70px rgba(0,0,0,.28);
+      text-align:center;
+    }
+    .welcome-logo { width:116px; height:116px; object-fit:contain; margin:0 auto 10px; }
+    .welcome-kicker, .help-kicker {
+      color:var(--accent);
+      font-size:12px;
+      font-weight:900;
+      letter-spacing:.13em;
+      text-transform:uppercase;
+    }
+    .welcome-card h2 { margin:8px 0 8px; font-size:29px; line-height:1.15; }
+    .welcome-event { color:var(--text2); font-size:16px; font-weight:700; }
+    .welcome-role {
+      display:inline-flex;
+      margin:16px auto 8px;
+      padding:7px 12px;
+      color:var(--success);
+      background:var(--success-soft);
+      border:1px solid #b9ddc9;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:800;
+    }
+    .welcome-copy { max-width:440px; margin:8px auto 22px; color:var(--text2); }
+    .welcome-actions { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .welcome-actions .btn { min-height:54px; }
+
+    body.help-open { overflow:hidden; }
+    .help-overlay {
+      position:fixed;
+      inset:0;
+      z-index:850;
+      display:none;
+      overflow:auto;
+      overscroll-behavior:contain;
+      color:var(--text);
+      background:var(--bg);
+    }
+    .help-overlay.open { display:block; }
+    .help-topbar {
+      position:sticky;
+      top:0;
+      z-index:2;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px max(18px, calc((100vw - 1000px) / 2));
+      background:rgba(255,255,255,.96);
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(10px);
+    }
+    .help-topbar-title { display:flex; align-items:center; gap:10px; min-width:0; font-weight:900; }
+    .help-topbar-logo { width:44px; height:44px; object-fit:contain; }
+    .help-close {
+      min-height:42px;
+      padding:8px 14px;
+      color:var(--text);
+      background:#fff;
+      border:2px solid var(--border);
+      border-radius:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .help-shell { width:min(100%, 1040px); margin:0 auto; padding:28px 20px 80px; }
+    .help-hero {
+      display:grid;
+      grid-template-columns:1fr auto;
+      align-items:center;
+      gap:22px;
+      padding:28px;
+      margin-bottom:18px;
+      background:linear-gradient(135deg, #fff 0%, var(--brand-soft) 100%);
+      border:1px solid var(--border);
+      border-radius:24px;
+      box-shadow:var(--shadow);
+    }
+    .help-hero h2 { margin:5px 0 8px; font-size:clamp(28px, 5vw, 44px); line-height:1.08; }
+    .help-hero p { margin:0; color:var(--text2); font-size:17px; }
+    .help-hero-logo { width:132px; height:132px; object-fit:contain; }
+    .help-card {
+      padding:24px;
+      margin-bottom:18px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:20px;
+      box-shadow:0 4px 16px rgba(30,26,22,.045);
+    }
+    .help-card h3 { margin:0 0 8px; color:var(--accent); font-size:20px; }
+    .help-card p { color:var(--text2); }
+    .help-quick-steps { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:16px; }
+    .help-step { padding:16px; background:var(--surface2); border:1px solid var(--border); border-radius:16px; }
+    .help-step-number {
+      width:30px;
+      height:30px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin-bottom:10px;
+      color:#fff;
+      background:var(--accent);
+      border-radius:50%;
+      font-weight:900;
+    }
+    .help-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+    .help-video-card { overflow:hidden; background:#fff; border:1px solid var(--border); border-radius:20px; box-shadow:0 4px 16px rgba(30,26,22,.045); }
+    .help-video { display:block; width:100%; aspect-ratio:16/9; background:#161616; }
+    .help-media-copy { padding:18px; }
+    .help-media-copy h3 { margin:0 0 5px; font-size:19px; }
+    .help-media-copy p { margin:0; color:var(--text2); font-size:14px; }
+    .help-role-tag { display:inline-block; margin-bottom:8px; padding:4px 8px; color:var(--accent); background:var(--brand-soft); border-radius:999px; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+    .help-pdf-frame { width:100%; height:600px; margin-top:16px; border:1px solid var(--border); border-radius:14px; background:#fff; }
+    .help-pdf-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+    .help-pdf-actions a { width:auto; text-decoration:none; }
+    .help-note { margin-top:10px; color:var(--text2); font-size:13px; }
+
+    @media (max-width:760px) {
+      .header-help { width:36px; height:36px; flex-basis:36px; font-size:19px; }
+      .help-shell { padding:18px 14px 90px; }
+      .help-hero { grid-template-columns:1fr; padding:22px; }
+      .help-hero-logo { width:92px; height:92px; grid-row:1; }
+      .help-grid, .help-quick-steps { grid-template-columns:1fr; }
+      .help-pdf-frame { height:430px; }
+      .welcome-card { padding:24px 18px; }
+      .welcome-actions { grid-template-columns:1fr; }
+      .welcome-actions .btn-primary { grid-row:1; }
+    }
+
+    @media (max-width:520px) {
+      .header-connection { display:none; }
+      .help-topbar-title span { max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .help-pdf-frame { display:none; }
+      .help-card { padding:19px; }
+    }
   </style>
 </head>
 <body>
@@ -1067,7 +1244,7 @@
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-03e · Tatami Light</div>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-04a · Tatami Light</div>
   </div>
 </div>
 
@@ -1101,6 +1278,22 @@
   <div class="pin-error" id="pinError"></div>
 </div>
 
+<!-- EINMALIGE WILLKOMMENSSEITE PRO GERÄTEART -->
+<div class="welcome-overlay hidden" id="welcomeOverlay" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+  <div class="welcome-card">
+    <img class="welcome-logo" src="svf-budo-logo-split-u-v3.png" alt="SVF-BUDO">
+    <div class="welcome-kicker">Digitale Veranstaltungskasse</div>
+    <h2 id="welcomeTitle">Willkommen</h2>
+    <div class="welcome-event" id="welcomeEventName">Veranstaltungskasse</div>
+    <div class="welcome-role" id="welcomeRoleLabel">Geräteart</div>
+    <p class="welcome-copy" id="welcomeRoleCopy">Hier findest du einen kurzen Einstieg in die wichtigsten Funktionen dieses Geräts.</p>
+    <div class="welcome-actions">
+      <button class="btn btn-secondary" type="button" onclick="openHelpFromWelcome()">? Anleitung ansehen</button>
+      <button class="btn btn-primary" type="button" onclick="finishWelcome()">Direkt zur App</button>
+    </div>
+  </div>
+</div>
+
 <!-- HEADER -->
 <div class="header">
   <div class="header-brand">
@@ -1109,9 +1302,75 @@
   </div>
   <div class="header-controls">
     <span class="header-connection" id="headerConnection" role="status" aria-live="polite" title="Firebase-Verbindung wird geprüft"><span class="header-connection-dot"></span><span class="header-connection-label" id="headerConnectionLabel">Prüfen…</span></span>
+    <button class="header-help" type="button" onclick="openHelpCenter()" aria-label="Anleitung öffnen" title="Anleitung öffnen">?</button>
     <button class="header-mode" id="headerMode" onclick="requestDeviceModeChange()" style="cursor:pointer;border:1px solid var(--border);">Wird geladen…</button>
   </div>
 </div>
+
+<!-- DAUERHAFTER HILFEBEREICH -->
+<section class="help-overlay" id="helpOverlay" aria-hidden="true" aria-labelledby="helpTitle">
+  <div class="help-topbar">
+    <div class="help-topbar-title"><img class="help-topbar-logo" src="svf-budo-logo-split-u-v3.png" alt=""><span>Anleitung &amp; Training</span></div>
+    <button class="help-close" type="button" onclick="closeHelpCenter()" aria-label="Hilfebereich schließen">✕ Schließen</button>
+  </div>
+  <div class="help-shell">
+    <div class="help-hero">
+      <div>
+        <div class="help-kicker" id="helpRoleLabel">Hilfe für dieses Gerät</div>
+        <h2 id="helpTitle">Sicher durch die Veranstaltung</h2>
+        <p><span id="helpEventName">Veranstaltungskasse</span> · Videos und Handbuch sind direkt in der App verfügbar.</p>
+      </div>
+      <img class="help-hero-logo" src="svf-budo-logo-split-u-v3.png" alt="SVF-BUDO">
+    </div>
+
+    <div class="help-card">
+      <h3>Schnelleinstieg</h3>
+      <p id="helpIntro">Die wichtigsten Schritte passend zur ausgewählten Geräteart.</p>
+      <div class="help-quick-steps" id="helpQuickSteps"></div>
+    </div>
+
+    <div class="help-grid">
+      <article class="help-video-card">
+        <video class="help-video" controls playsinline preload="metadata" poster="hilfe-kasse-verwaltung-poster.png">
+          <source src="So_verwalten_Sie_die_digitale_Veranstaltungskasse.mp4" type="video/mp4">
+          <track src="hilfe-kasse-verwaltung-de.vtt" kind="captions" srclang="de" label="Deutsch – Begleittexte" default>
+          Dein Browser kann dieses Video nicht direkt wiedergeben.
+        </video>
+        <div class="help-media-copy">
+          <span class="help-role-tag">Kasse / Verwaltung</span>
+          <h3>Die Veranstaltungskasse verwalten</h3>
+          <p>Startbestand, QR-Codes, Auszahlungen, Verwaltung und Abschluss.</p>
+        </div>
+      </article>
+
+      <article class="help-video-card">
+        <video class="help-video" controls playsinline preload="metadata" poster="hilfe-stand-poster.png">
+          <source src="Stand-Training.mp4" type="video/mp4">
+          <track src="hilfe-stand-de.vtt" kind="captions" srclang="de" label="Deutsch – Begleittexte" default>
+          Dein Browser kann dieses Video nicht direkt wiedergeben.
+        </video>
+        <div class="help-media-copy">
+          <span class="help-role-tag">Stand</span>
+          <h3>Stand-Training</h3>
+          <p>QR-Code scannen, Produkte buchen und Korrekturen sicher durchführen.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="help-card">
+      <h3>Vollständige Anleitung als PDF</h3>
+      <p>Zum Nachlesen, Weitergeben oder Ausdrucken. Auf kleinen Smartphone-Displays öffnet sich die Anleitung in einem eigenen Fenster.</p>
+      <object class="help-pdf-frame" data="SVF_Budo_Digitale_Veranstaltungskasse.pdf#view=FitH" type="application/pdf">
+        <p>Die PDF-Vorschau wird von diesem Browser nicht unterstützt.</p>
+      </object>
+      <div class="help-pdf-actions">
+        <a class="btn btn-primary" href="SVF_Budo_Digitale_Veranstaltungskasse.pdf" target="_blank" rel="noopener">PDF öffnen</a>
+        <a class="btn btn-secondary" href="SVF_Budo_Digitale_Veranstaltungskasse.pdf" download>PDF herunterladen</a>
+      </div>
+      <div class="help-note">Die Videos starten nur nach einem Tipp auf „Abspielen“. Ton und Vollbild steuerst du direkt im Videoplayer.</div>
+    </div>
+  </div>
+</section>
 
 <!-- NAV -->
 <div class="nav" id="mainNav" style="display:none">
@@ -1726,7 +1985,7 @@ function updateFirebaseStatus() {
   if (status) {
     if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
     else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-03e`;
+    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-04a`;
   }
   if (notice) notice.classList.toggle("status-error", !online);
   if (headerConnection) {
@@ -1811,6 +2070,7 @@ async function attachEventListeners(eventId) {
     document.title = activeEventMeta.name + " – Veranstaltungskasse";
     refreshHeaderMode();
     updateFirebaseStatus();
+    updateHelpContext();
     if (adminUnlocked) renderAdmin();
   });
   db.ref(basePath + "/products").on("value", snap => {
@@ -2005,6 +2265,113 @@ function saveLocal() {
   localStorage.setItem("vk_transactions", JSON.stringify(transactions));
 }
 
+// ── Willkommen & Hilfebereich ──
+function helpRoleName(role = mode) {
+  if (role === "kasse") return "Kasse / Verwaltung";
+  if (role === "stand") return "Stand";
+  return "Verlauf / Auswertung";
+}
+
+function welcomeStorageKey(role = mode) {
+  return "vk_welcome_seen_" + role;
+}
+
+function roleHelpContent(role = mode) {
+  if (role === "kasse") return {
+    copy: "In weniger als zwei Minuten erhältst du einen Überblick über Kasse, QR-Codes und Verwaltung.",
+    intro: "Für Kassen- und Verwaltungsteams zählen vor allem diese drei Schritte:",
+    steps: [
+      ["Start prüfen", "Veranstaltung, Verbindung und Wechselgeldbestand kontrollieren."],
+      ["QR-Code ausgeben", "Zahlung annehmen, Guthaben wählen und Code fotografieren oder drucken lassen."],
+      ["Sauber abschließen", "Aufladungen und Auszahlungen prüfen, Veranstaltung abschließen und exportieren."]
+    ]
+  };
+  if (role === "stand") return {
+    copy: "Der schnelle Einstieg zeigt dir das Scannen, Buchen und sichere Korrigieren am Stand.",
+    intro: "Für das Verkaufsteam ist der Ablauf bewusst kurz gehalten:",
+    steps: [
+      ["Code scannen", "QR-Code des Gastes erfassen und verfügbares Guthaben prüfen."],
+      ["Bestellung prüfen", "Produkte und Mengen auswählen und Gesamtbetrag kontrollieren."],
+      ["Buchung bestätigen", "Erst dann buchen und die Erfolgsmeldung abwarten."]
+    ]
+  };
+  return {
+    copy: "Hier findest du den schnellen Zugang zu Verlauf, Auswertung und den vollständigen Anleitungen.",
+    intro: "Auf diesem Gerät stehen Lesen und Kontrolle im Mittelpunkt:",
+    steps: [
+      ["Veranstaltung prüfen", "Kontrollieren, welche Veranstaltung auf diesem Gerät ausgewählt ist."],
+      ["Verlauf ansehen", "Aufladungen, Verkäufe, Gutschriften und Auszahlungen nachvollziehen."],
+      ["Auswertung öffnen", "Umsatz, Kassenbestand und Abschlussdaten kontrollieren."]
+    ]
+  };
+}
+
+function updateHelpContext() {
+  const eventName = activeEventMeta && activeEventMeta.name && activeEventMeta.status !== "loading"
+    ? activeEventMeta.name
+    : "Veranstaltungskasse";
+  const content = roleHelpContent();
+  const roleName = helpRoleName();
+  const welcomeEvent = document.getElementById("welcomeEventName");
+  const welcomeRole = document.getElementById("welcomeRoleLabel");
+  const welcomeCopy = document.getElementById("welcomeRoleCopy");
+  const helpEvent = document.getElementById("helpEventName");
+  const helpRole = document.getElementById("helpRoleLabel");
+  const helpIntro = document.getElementById("helpIntro");
+  const quickSteps = document.getElementById("helpQuickSteps");
+  if (welcomeEvent) welcomeEvent.textContent = eventName;
+  if (welcomeRole) welcomeRole.textContent = roleName;
+  if (welcomeCopy) welcomeCopy.textContent = content.copy;
+  if (helpEvent) helpEvent.textContent = eventName;
+  if (helpRole) helpRole.textContent = "Hilfe für " + roleName;
+  if (helpIntro) helpIntro.textContent = content.intro;
+  if (quickSteps) quickSteps.innerHTML = content.steps.map((step, index) =>
+    `<div class="help-step"><div class="help-step-number">${index + 1}</div><strong>${escapeHtml(step[0])}</strong><div style="margin-top:5px;color:var(--text2);font-size:14px;">${escapeHtml(step[1])}</div></div>`
+  ).join("");
+}
+
+function maybeShowWelcome() {
+  if (!["kasse", "stand", "view"].includes(mode)) return;
+  updateHelpContext();
+  if (localStorage.getItem(welcomeStorageKey()) === "1") return;
+  const overlay = document.getElementById("welcomeOverlay");
+  if (overlay) overlay.classList.remove("hidden");
+}
+
+function finishWelcome() {
+  if (["kasse", "stand", "view"].includes(mode)) localStorage.setItem(welcomeStorageKey(), "1");
+  const overlay = document.getElementById("welcomeOverlay");
+  if (overlay) overlay.classList.add("hidden");
+}
+
+function openHelpFromWelcome() {
+  finishWelcome();
+  openHelpCenter();
+}
+
+function openHelpCenter() {
+  updateHelpContext();
+  const overlay = document.getElementById("helpOverlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("help-open");
+  overlay.scrollTop = 0;
+  const closeButton = overlay.querySelector(".help-close");
+  if (closeButton) closeButton.focus();
+}
+
+function closeHelpCenter() {
+  const overlay = document.getElementById("helpOverlay");
+  if (!overlay) return;
+  overlay.querySelectorAll("video").forEach(video => video.pause());
+  overlay.classList.remove("open");
+  overlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("help-open");
+  const helpButton = document.querySelector(".header-help");
+  if (helpButton) helpButton.focus();
+}
+
 // ── PIN ──
 let pinBuffer = "";
 function pinInput(digit) {
@@ -2063,6 +2430,7 @@ function setDeviceMode(nextMode, initialSetup = false) {
   buildProductGrid();
   renderCashManagement();
   initFirebase();
+  setTimeout(maybeShowWelcome, 180);
   if (!initialSetup) showToast("Geräteart wurde auf diesem Gerät geändert", "success");
 }
 
@@ -3222,6 +3590,9 @@ function formatTime(ts) {
 window.onload = function() {
   buildProductGrid();
   renderCashManagement();
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && document.getElementById("helpOverlay").classList.contains("open")) closeHelpCenter();
+  });
   const savedMode = localStorage.getItem("vk_device_mode");
   if (["kasse", "stand", "view"].includes(savedMode)) setDeviceMode(savedMode, true);
   else initFirebase();
