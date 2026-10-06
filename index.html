@@ -716,6 +716,27 @@
     .auth-card { width:100%; max-width:420px; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:26px; }
     .auth-title { font-size:22px; font-weight:700; margin-bottom:8px; }
     .auth-copy { color:var(--text2); font-size:13px; line-height:1.5; margin-bottom:20px; }
+    .auth-divider { display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--text2); font-size:12px; }
+    .auth-divider::before, .auth-divider::after { content:""; flex:1; height:1px; background:var(--border); }
+    .auth-choice-title { margin-bottom:7px; font-size:15px; font-weight:750; }
+    .auth-choice-copy { margin:0 0 13px; color:var(--text2); font-size:12px; line-height:1.5; }
+    .pairing-code { margin:18px 0 8px; color:var(--accent); font-family:var(--mono); font-size:42px; font-weight:800; letter-spacing:9px; text-align:center; }
+    .pairing-hint { margin:0 auto 18px; max-width:330px; color:var(--text2); font-size:13px; line-height:1.55; text-align:center; }
+    .pairing-state { padding:12px; border-radius:12px; background:var(--success-soft); color:var(--success); font-size:13px; line-height:1.45; text-align:center; }
+    .stand-session-bar { display:none; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; padding:13px 15px; border:1px solid #b9ddc9; border-radius:14px; background:var(--success-soft); }
+    .stand-session-bar.visible { display:flex; }
+    .stand-session-copy { min-width:0; }
+    .stand-session-copy strong { display:block; color:var(--success); font-size:13px; }
+    .stand-session-copy span { display:block; margin-top:2px; color:var(--text2); font-size:12px; }
+    .stand-session-bar .btn { width:auto; flex:0 0 auto; padding:9px 12px; }
+    .device-access-list { display:grid; gap:10px; }
+    .device-access-row { padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--surface2); }
+    .device-access-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+    .device-access-code { color:var(--accent); font-family:var(--mono); font-size:20px; font-weight:800; letter-spacing:3px; }
+    .device-access-meta { margin-top:5px; color:var(--text2); font-size:12px; line-height:1.5; }
+    .device-access-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .device-access-actions .btn { width:auto; }
+    .device-access-expiry { display:grid; grid-template-columns:minmax(0,1fr) minmax(120px,.55fr); gap:8px; margin-top:10px; }
     .connection-state { display:flex; justify-content:space-between; align-items:center; gap:10px; }
     .connection-state .btn { width:auto; padding:8px 12px; }
     @media (min-width:600px) { .cash-grid { grid-template-columns:repeat(4,1fr); } }
@@ -1025,6 +1046,10 @@
       .product-btn { min-height:142px; }
       .auth-card { padding:22px 20px; }
       .auth-logo { width:128px; height:128px; }
+      .pairing-code { font-size:34px; letter-spacing:7px; }
+      .stand-session-bar { align-items:flex-start; }
+      .device-access-head { flex-direction:column; }
+      .device-access-expiry { grid-template-columns:1fr; }
       .pin-overlay { justify-content:flex-start; overflow-y:auto; padding:20px 18px 92px; }
       .pin-logo { width:122px; height:122px; margin-bottom:12px; }
       .pin-pad { width:min(260px,100%); gap:9px; }
@@ -1225,10 +1250,35 @@
     }
 
     @media (max-width:520px) {
-      .header-connection { display:none; }
+      .header { padding-right:10px; padding-left:10px; }
+      .header-brand { flex:1 1 auto; gap:7px; overflow:hidden; }
+      .header-copy { min-width:0; }
+      .header-copy strong { max-width:112px; }
+      .header-controls { flex:0 0 auto; gap:5px; }
+      .header-connection {
+        display:inline-flex;
+        width:28px;
+        height:36px;
+        min-height:36px;
+        flex:0 0 28px;
+        padding:0;
+        border-radius:50%;
+      }
+      .header-connection-dot { width:11px; height:11px; flex-basis:11px; }
+      .header-mode { max-width:124px; padding-right:9px; padding-left:9px; }
       .help-topbar-title span { max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .help-pdf-frame { display:none; }
       .help-card { padding:19px; }
+    }
+
+    @media (max-width:390px) {
+      .header { padding-right:8px; padding-left:8px; }
+      .header-brand { gap:6px; }
+      .header-copy strong { max-width:86px; }
+      .header-controls { gap:4px; }
+      .header-connection { width:24px; flex-basis:24px; }
+      .header-help { width:34px; height:34px; flex-basis:34px; }
+      .header-mode { max-width:104px; padding-right:7px; padding-left:7px; }
     }
   </style>
 </head>
@@ -1239,12 +1289,31 @@
   <div class="auth-card">
     <img class="auth-logo" src="svf-budo-logo-split-u-v3.png" alt="SVF-BUDO">
     <div class="auth-title">Geräteanmeldung</div>
-    <p class="auth-copy">Dieses Gerät benötigt einmalig das Bedienerkonto der Veranstaltungskasse. Die Anmeldung bleibt in diesem Browser gespeichert.</p>
+    <p class="auth-copy">Wähle, ob dieses Gerät dauerhaft für Kasse und Verwaltung oder vorübergehend als privates Standgerät genutzt wird.</p>
+    <div class="auth-choice-title">Kasse / Verwaltung</div>
+    <p class="auth-choice-copy">Für vereinseigene oder dauerhaft betreute Geräte mit Bedienerkonto.</p>
     <div class="input-group"><label class="input-label">E-Mail-Adresse</label><input type="email" class="input" id="firebaseEmail" autocomplete="username"></div>
     <div class="input-group"><label class="input-label">Passwort</label><input type="password" class="input" id="firebasePassword" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFirebase()"></div>
     <button class="btn btn-primary" id="firebaseLoginBtn" onclick="loginFirebase()">Anmelden</button>
     <div class="pin-error" id="firebaseLoginError" style="height:auto;margin-top:12px;"></div>
-    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-04a · Tatami Light</div>
+    <div class="auth-divider">oder</div>
+    <div class="auth-choice-title">Privates Standgerät</div>
+    <p class="auth-choice-copy">Kein gemeinsames Passwort nötig. Die Kasse gibt dieses Handy nur für die jeweilige Schicht frei.</p>
+    <button class="btn btn-secondary" id="startPairingBtn" onclick="startPrivateStandPairing()">🛒 Standgerät freigeben</button>
+    <div style="margin-top:16px;text-align:center;color:var(--text2);font-family:var(--mono);font-size:10px;">Version 2026-10-06a · Tatami Light</div>
+  </div>
+</div>
+
+<!-- ZEITLICH BEGRENZTE FREIGABE FÜR PRIVATE STANDGERÄTE -->
+<div class="auth-overlay hidden" id="devicePairingOverlay" role="dialog" aria-modal="true" aria-labelledby="devicePairingTitle">
+  <div class="auth-card">
+    <img class="auth-logo" src="svf-budo-logo-split-u-v3.png" alt="SVF-BUDO">
+    <div class="auth-title" id="devicePairingTitle">Standgerät freigeben</div>
+    <p class="auth-copy">Zeige den folgenden Code an der Kasse. Nach der Bestätigung startet dieses Gerät automatisch im Standmodus.</p>
+    <div class="pairing-code" id="devicePairingCode">------</div>
+    <p class="pairing-hint">Der Code ist nur für dieses Gerät bestimmt. Eine Freigabe kann zeitlich begrenzt und jederzeit von der Verwaltung beendet werden.</p>
+    <div class="pairing-state" id="devicePairingState">Freigabe durch Kasse wird erwartet …</div>
+    <button class="btn btn-secondary" style="margin-top:14px;" onclick="cancelPrivateStandPairing()">Vorgang abbrechen</button>
   </div>
 </div>
 
@@ -1468,6 +1537,11 @@
 
   <div class="connection-warning" id="connectionWarningStand" hidden><strong>⚠️ Keine Firebase-Verbindung</strong><span>Verkäufe können erst wieder gebucht werden, wenn die Verbindung hergestellt ist.</span></div>
 
+  <div class="stand-session-bar" id="standSessionBar">
+    <div class="stand-session-copy"><strong>✓ Privates Standgerät freigegeben</strong><span id="standSessionInfo">Freigabe wird geladen …</span></div>
+    <button class="btn btn-secondary btn-sm" type="button" onclick="confirmFinishStandShift()">Schicht beenden</button>
+  </div>
+
   <!-- Scan -->
   <div class="card" id="standScanCard">
     <div class="card-title">Kunden-QR scannen</div>
@@ -1617,6 +1691,13 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Private Standgeräte</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:14px;">Neue Geräte zeigen einen sechsstelligen Code. Hier kannst du sie für die ausgewählte Veranstaltung und einen begrenzten Zeitraum freigeben oder sofort sperren.</p>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="renderDeviceAccessAdmin()" style="margin-bottom:12px;">Liste aktualisieren</button>
+      <div class="device-access-list" id="deviceAccessAdminList"><p style="color:var(--text2);font-size:13px;">Gerätefreigaben werden geladen …</p></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Neue Veranstaltung</div>
       <div class="input-group"><label class="input-label">Veranstaltungsname</label><input class="input" id="newEventName" placeholder="z. B. Sommerfest 2027"></div>
       <div class="input-group"><label class="input-label">Datum</label><input type="date" class="input" id="newEventDate"></div>
@@ -1709,6 +1790,12 @@ let firebaseInitialized = false;
 let firebaseListenersStarted = false;
 let firebaseConnected = false;
 let authReadyPromise = Promise.resolve();
+let temporaryDeviceAccess = null;
+let temporaryDeviceAccessRef = null;
+let temporaryPairingRequestRef = null;
+let temporaryAccessTimer = null;
+let temporaryAccessEnding = false;
+let adminDeviceWatchRefs = [];
 let selectedAmount = 0;
 let currentTid = null;
 let currentBalance = 0;
@@ -1899,7 +1986,7 @@ async function closeEvent() {
 
 function ensureEventOpen() {
   if (!eventDataReady) { showToast("Veranstaltung wird noch geladen", "info"); return false; }
-  if (!cashState.closedAt) return true;
+  if (!cashState.closedAt && activeEventMeta.status !== "closed") return true;
   showToast("Veranstaltung ist bereits abgeschlossen", "error");
   return false;
 }
@@ -1919,14 +2006,198 @@ function initFirebase() {
     authReadyPromise = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     auth.onAuthStateChanged(async user => {
       firebaseOk = !!user;
-      document.getElementById("firebaseAuthOverlay").classList.toggle("hidden", !!user);
-      if (user) await startFirebaseListeners();
+      if (!user) {
+        document.getElementById("firebaseAuthOverlay").classList.remove("hidden");
+        document.getElementById("devicePairingOverlay").classList.add("hidden");
+        detachTemporaryDeviceListeners();
+      } else if (ADMIN_UIDS.includes(user.uid)) {
+        document.getElementById("firebaseAuthOverlay").classList.add("hidden");
+        document.getElementById("devicePairingOverlay").classList.add("hidden");
+        detachTemporaryDeviceListeners();
+        await startFirebaseListeners();
+      } else if (user.isAnonymous) {
+        document.getElementById("firebaseAuthOverlay").classList.add("hidden");
+        await monitorTemporaryStandAccess(user);
+      } else {
+        document.getElementById("firebaseLoginError").textContent = "Dieses Konto ist nicht als Kassen- oder Verwaltungsgerät freigegeben.";
+        await auth.signOut();
+      }
       updateFirebaseStatus();
     });
   } catch(e) {
     console.error("Firebase Fehler:", e);
     document.getElementById("firebaseLoginError").textContent = "Firebase konnte nicht gestartet werden.";
   }
+}
+
+function isTemporaryStandUser() {
+  return !!(auth && auth.currentUser && auth.currentUser.isAnonymous);
+}
+
+function generatePairingCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function detachTemporaryDeviceListeners() {
+  if (temporaryDeviceAccessRef) temporaryDeviceAccessRef.off();
+  if (temporaryPairingRequestRef) temporaryPairingRequestRef.off();
+  temporaryDeviceAccessRef = null;
+  temporaryPairingRequestRef = null;
+  temporaryDeviceAccess = null;
+  clearTimeout(temporaryAccessTimer);
+  temporaryAccessTimer = null;
+  const bar = document.getElementById("standSessionBar");
+  if (bar) bar.classList.remove("visible");
+}
+
+async function startPrivateStandPairing() {
+  const button = document.getElementById("startPairingBtn");
+  const error = document.getElementById("firebaseLoginError");
+  if (!auth) { initFirebase(); await new Promise(resolve => setTimeout(resolve, 100)); }
+  if (!auth) { error.textContent = "Firebase konnte nicht gestartet werden."; return; }
+  button.disabled = true;
+  button.textContent = "Gerät wird vorbereitet …";
+  error.textContent = "";
+  try {
+    await authReadyPromise;
+    if (auth.currentUser && !auth.currentUser.isAnonymous) await auth.signOut();
+    if (!auth.currentUser) await auth.signInAnonymously();
+  } catch (e) {
+    console.error(e);
+    const messages = {
+      "auth/operation-not-allowed":"Die anonyme Anmeldung muss in Firebase noch aktiviert werden.",
+      "auth/network-request-failed":"Firebase ist über das Netzwerk nicht erreichbar."
+    };
+    error.textContent = (messages[e.code] || "Das private Standgerät konnte nicht vorbereitet werden.") + " (" + (e.code || "unbekannter Fehler") + ")";
+  } finally {
+    button.disabled = false;
+    button.textContent = "🛒 Standgerät freigeben";
+  }
+}
+
+async function ensurePairingRequest(user) {
+  const ref = db.ref("pairingRequests/" + user.uid);
+  const existing = (await ref.once("value")).val();
+  const stillUsable = existing && existing.status === "pending" && Number(existing.createdAt || 0) > Date.now() - 30 * 60 * 1000;
+  const request = stillUsable ? existing : {
+    uid:user.uid,
+    code:generatePairingCode(),
+    status:"pending",
+    createdAt:firebase.database.ServerValue.TIMESTAMP
+  };
+  if (!stillUsable) await ref.set(request);
+  document.getElementById("devicePairingCode").textContent = request.code;
+  document.getElementById("devicePairingState").textContent = "Freigabe durch Kasse wird erwartet …";
+  document.getElementById("devicePairingOverlay").classList.remove("hidden");
+  temporaryPairingRequestRef = ref;
+  ref.on("value", snapshot => {
+    const value = snapshot.val();
+    if (value && value.code) document.getElementById("devicePairingCode").textContent = value.code;
+    if (value && value.status === "approved") document.getElementById("devicePairingState").textContent = "Freigabe bestätigt – Stand wird geöffnet …";
+  });
+}
+
+function temporaryAccessIsValid(access) {
+  return !!(access && access.active === true && access.role === "stand" && access.eventId && Number(access.expiresAt) > Date.now());
+}
+
+async function monitorTemporaryStandAccess(user) {
+  detachTemporaryDeviceListeners();
+  temporaryDeviceAccessRef = db.ref("deviceAccess/" + user.uid);
+  const firstSnapshot = await temporaryDeviceAccessRef.once("value");
+  if (!firstSnapshot.exists()) await ensurePairingRequest(user);
+  temporaryDeviceAccessRef.on("value", async snapshot => {
+    const access = snapshot.val();
+    if (temporaryAccessIsValid(access)) {
+      temporaryDeviceAccess = access;
+      document.getElementById("devicePairingOverlay").classList.add("hidden");
+      mode = "stand";
+      localStorage.setItem("vk_device_mode", "stand");
+      setDeviceMode("stand", true);
+      firebaseListenersStarted = true;
+      await attachEventListeners(access.eventId);
+      updateTemporaryStandSessionUi();
+      scheduleTemporaryAccessExpiry(access.expiresAt);
+      return;
+    }
+    if (access && !temporaryAccessEnding) {
+      await endTemporaryStandSession(access.active === false ? "Die Freigabe dieses Standgeräts wurde beendet." : "Die zeitliche Freigabe dieses Standgeräts ist abgelaufen.", false);
+    }
+  });
+}
+
+function scheduleTemporaryAccessExpiry(expiresAt) {
+  clearTimeout(temporaryAccessTimer);
+  const delay = Math.max(0, Number(expiresAt) - Date.now());
+  temporaryAccessTimer = setTimeout(() => endTemporaryStandSession("Die zeitliche Freigabe dieses Standgeräts ist abgelaufen.", false), Math.min(delay + 250, 2147483000));
+}
+
+function updateTemporaryStandSessionUi() {
+  const bar = document.getElementById("standSessionBar");
+  const info = document.getElementById("standSessionInfo");
+  if (!bar || !temporaryAccessIsValid(temporaryDeviceAccess)) return;
+  const until = new Date(Number(temporaryDeviceAccess.expiresAt)).toLocaleString("de-DE", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+  info.textContent = (temporaryDeviceAccess.label || "Standgerät") + " · freigegeben bis " + until + " Uhr";
+  bar.classList.add("visible");
+  refreshHeaderMode();
+}
+
+function clearTemporaryDeviceStorage() {
+  ["vk_device_mode","vk_selected_event_id","vk_transactions","vk_cash_state","vk_welcome_seen_stand"].forEach(key => localStorage.removeItem(key));
+  transactions = [];
+  order = {};
+  currentTid = null;
+  currentBalance = 0;
+}
+
+function confirmFinishStandShift() {
+  openModal("Schicht sicher beenden", '<p style="color:var(--text2);line-height:1.55;">Die Freigabe dieses privaten Geräts wird sofort beendet. Danach sind keine Buchungen und kein Zugriff auf Veranstaltungsdaten mehr möglich.</p>', [
+    {label:"Schicht jetzt beenden", cls:"btn-danger", fn:()=>{ closeModal(); endTemporaryStandSession("Die Schicht wurde sicher beendet.", true); }},
+    {label:"Abbrechen", cls:"btn-secondary", fn:closeModal}
+  ]);
+}
+
+async function endTemporaryStandSession(message, revokeOwnAccess = true) {
+  if (temporaryAccessEnding) return;
+  temporaryAccessEnding = true;
+  try {
+    stopScanner("stand");
+    const user = auth && auth.currentUser;
+    if (user && user.isAnonymous && revokeOwnAccess) {
+      try { await db.ref("deviceAccess/" + user.uid + "/active").set(false); } catch (e) { console.warn("Freigabe konnte nicht markiert werden:", e); }
+      try { await db.ref("pairingRequests/" + user.uid).remove(); } catch (_) {}
+    }
+    detachTemporaryDeviceListeners();
+    eventListenerPaths.forEach(path => db.ref(path).off());
+    eventListenerPaths = [];
+    firebaseListenersStarted = false;
+    clearTemporaryDeviceStorage();
+    if (user) {
+      try { if (user.isAnonymous) await user.delete(); else await auth.signOut(); }
+      catch (_) { await auth.signOut(); }
+    }
+    firebaseOk = false;
+    activeEventId = null;
+    eventDataReady = false;
+    document.getElementById("devicePairingOverlay").classList.add("hidden");
+    document.getElementById("firebaseAuthOverlay").classList.remove("hidden");
+    document.getElementById("firebaseLoginError").textContent = message;
+    showToast(message, "success");
+  } finally {
+    temporaryAccessEnding = false;
+    updateFirebaseStatus();
+  }
+}
+
+async function cancelPrivateStandPairing() {
+  const user = auth && auth.currentUser;
+  if (user && user.isAnonymous) {
+    try { await db.ref("pairingRequests/" + user.uid).remove(); } catch (_) {}
+    detachTemporaryDeviceListeners();
+    try { await user.delete(); } catch (_) { await auth.signOut(); }
+  }
+  document.getElementById("devicePairingOverlay").classList.add("hidden");
+  document.getElementById("firebaseAuthOverlay").classList.remove("hidden");
 }
 
 async function loginFirebase() {
@@ -1964,6 +2235,7 @@ async function logoutFirebase() {
   if (db) {
     eventListenerPaths.forEach(path => db.ref(path).off());
   }
+  detachTemporaryDeviceListeners();
   await auth.signOut();
   firebaseOk = false;
   firebaseListenersStarted = false;
@@ -1985,7 +2257,7 @@ function updateFirebaseStatus() {
   if (status) {
     if (!firebaseOk) status.innerHTML = "<strong>🔒 Nicht angemeldet</strong>";
     else if (!firebaseConnected) status.innerHTML = "<strong>⚠️ Offline</strong> – Finanzbuchungen sind gesperrt.";
-    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-04a`;
+    else status.innerHTML = `<strong>✅ Firebase verbunden</strong> – ${activeEventMeta.name || "Veranstaltung"} · Version 2026-10-06a`;
   }
   if (notice) notice.classList.toggle("status-error", !online);
   if (headerConnection) {
@@ -2056,7 +2328,9 @@ async function attachEventListeners(eventId) {
   activeEventMeta = { name:"Veranstaltung wird geladen…", date:"", status:"loading" };
   const listenerEventId = eventId;
   const basePath = "events/" + eventId;
-  eventListenerPaths = [basePath + "/meta", basePath + "/products", basePath + "/cashState", basePath + "/transactions"];
+  const temporaryStand = isTemporaryStandUser();
+  eventListenerPaths = [basePath + "/meta", basePath + "/products", basePath + "/transactions"];
+  if (!temporaryStand) eventListenerPaths.push(basePath + "/cashState");
   transactions = [];
   cashState = defaultCashState();
   PRODUCTS = [];
@@ -2067,6 +2341,7 @@ async function attachEventListeners(eventId) {
   db.ref(basePath + "/meta").on("value", snap => {
     if (activeEventId !== listenerEventId) return;
     activeEventMeta = Object.assign({ name:"Veranstaltung", date:"", status:"active" }, snap.val() || {});
+    if (temporaryStand) eventDataReady = true;
     document.title = activeEventMeta.name + " – Veranstaltungskasse";
     refreshHeaderMode();
     updateFirebaseStatus();
@@ -2080,15 +2355,17 @@ async function attachEventListeners(eventId) {
     buildProductGrid();
     if (adminUnlocked) renderAdminProducts();
   });
-  db.ref(basePath + "/cashState").on("value", snap => {
-    if (activeEventId !== listenerEventId) return;
-    if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
-    else db.ref(basePath + "/cashState").set(defaultCashState());
-    localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
-    eventDataReady = true;
-    renderCashManagement();
-    if (adminUnlocked) renderAdmin();
-  });
+  if (!temporaryStand) {
+    db.ref(basePath + "/cashState").on("value", snap => {
+      if (activeEventId !== listenerEventId) return;
+      if (snap.exists()) cashState = Object.assign(defaultCashState(), snap.val());
+      else db.ref(basePath + "/cashState").set(defaultCashState());
+      localStorage.setItem("vk_cash_state", JSON.stringify(cashState));
+      eventDataReady = true;
+      renderCashManagement();
+      if (adminUnlocked) renderAdmin();
+    });
+  }
   listenTransactions(listenerEventId, basePath + "/transactions");
   currentTid = null;
   currentBalance = 0;
@@ -2235,8 +2512,11 @@ function firebaseErrorText(error, fallback) {
 async function commitFirebaseOperation(tid, type, amountEuros, items = [], meta = {}) {
   if (!ensureFirebaseReady()) throw new Error("offline");
   const normalizedTid = String(tid || "").trim();
-  const closedAt = await firebaseRestRead(eventPath("cashState/closedAt"));
-  if (closedAt) throw new Error("Veranstaltung ist abgeschlossen");
+  if (activeEventMeta.status === "closed") throw new Error("Veranstaltung ist abgeschlossen");
+  if (!isTemporaryStandUser()) {
+    const closedAt = await firebaseRestRead(eventPath("cashState/closedAt"));
+    if (closedAt) throw new Error("Veranstaltung ist abgeschlossen");
+  }
   const requestedCents = amountEuros == null ? null : Math.round(amountEuros * 100);
   const timestamp = Date.now();
   const txKey = db.ref(eventPath("transactions")).push().key;
@@ -2410,6 +2690,7 @@ function switchToView() {
 
 function setDeviceMode(nextMode, initialSetup = false) {
   if (!["kasse", "stand", "view"].includes(nextMode)) return;
+  if (isTemporaryStandUser() && nextMode !== "stand") { showToast("Dieses private Gerät ist ausschließlich als Standgerät freigegeben", "error"); return; }
   if (!initialSetup && !adminUnlocked && !deviceModeChangeAuthorized) { showToast("Zum Ändern der Geräteart ist die Verwaltungs-PIN erforderlich", "error"); return; }
   deviceModeChangeAuthorized = false;
   mode = nextMode;
@@ -2435,6 +2716,10 @@ function setDeviceMode(nextMode, initialSetup = false) {
 }
 
 function requestDeviceModeChange() {
+  if (isTemporaryStandUser()) {
+    confirmFinishStandShift();
+    return;
+  }
   deviceModeChangeAuthorized = false;
   deviceChangePinBuffer = "";
   openModal("Geräteart ändern", `<p style="color:var(--text2);margin-bottom:12px;">Zum Ändern bitte die vierstellige Verwaltungs-PIN über die Tasten eingeben.</p><div id="devicePinDisplay" style="text-align:center;font-family:var(--mono);font-size:24px;letter-spacing:8px;margin:16px 0;">○ ○ ○ ○</div><div class="pin-pad" style="margin:0 auto;">${[1,2,3,4,5,6,7,8,9].map(n => `<button class="pin-key" onclick="deviceModePin('${n}')">${n}</button>`).join("")}<button class="pin-key del" onclick="deviceModePin('del')">⌫</button><button class="pin-key" onclick="deviceModePin('0')">0</button><button class="pin-key" onclick="deviceModePin('ok')">✓</button></div>`, [{label:"Abbrechen", cls:"btn-secondary", fn:closeModal}]);
@@ -2467,7 +2752,7 @@ function showScreen(name) {
 }
 
 function refreshHeaderMode() {
-  const label = mode === "stand" ? "🛒 Stand" : mode === "view" ? "📊 Auswertung" : "💰 Kasse / Verwaltung";
+  const label = mode === "stand" ? (isTemporaryStandUser() ? "🛒 Stand · privat" : "🛒 Stand") : mode === "view" ? "📊 Auswertung" : "💰 Kasse / Verwaltung";
   document.getElementById("headerMode").textContent = label + (activeEventMeta.name ? " · " + activeEventMeta.name : "");
 }
 
@@ -2485,6 +2770,7 @@ function unlockAdmin() {
   adminUnlocked = true;
   document.getElementById("adminLocked").style.display = "none";
   document.getElementById("adminContent").style.display = "block";
+  startAdminDeviceAccessWatch();
   renderAdmin();
 }
 
@@ -2500,6 +2786,7 @@ function updateAdminPinDots() {
 }
 function lockAdmin() {
   adminUnlocked = false; adminPinBuffer = ""; updateAdminPinDots();
+  stopAdminDeviceAccessWatch();
   const locked = document.getElementById("adminLocked"); const content = document.getElementById("adminContent");
   if (locked) locked.style.display = "block"; if (content) content.style.display = "none";
 }
@@ -2510,7 +2797,9 @@ function ensureKasseMode() {
   return false;
 }
 function ensureSalesMode() {
-  if (mode === "kasse" || mode === "stand") return true;
+  if (mode === "kasse") return true;
+  if (mode === "stand" && (!isTemporaryStandUser() || temporaryAccessIsValid(temporaryDeviceAccess))) return true;
+  if (mode === "stand" && isTemporaryStandUser()) { showToast("Die Freigabe dieses Standgeräts ist nicht mehr gültig", "error"); return false; }
   showToast("Buchungen sind auf diesem Auswertungsgerät nicht freigegeben", "error");
   return false;
 }
@@ -3319,6 +3608,101 @@ function escapeHtml(value) {
   return String(value == null ? "" : value).replace(/[&<>"']/g, character => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" })[character]);
 }
 
+function localDateTimeInputValue(timestamp) {
+  const date = new Date(timestamp);
+  const pad = value => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function stopAdminDeviceAccessWatch() {
+  adminDeviceWatchRefs.forEach(ref => ref.off());
+  adminDeviceWatchRefs = [];
+}
+
+function startAdminDeviceAccessWatch() {
+  stopAdminDeviceAccessWatch();
+  if (!db || !adminUnlocked) return;
+  ["pairingRequests", "deviceAccess"].forEach(path => {
+    const ref = db.ref(path);
+    ref.on("value", () => { if (adminUnlocked) renderDeviceAccessAdmin(); });
+    adminDeviceWatchRefs.push(ref);
+  });
+}
+
+async function renderDeviceAccessAdmin() {
+  const container = document.getElementById("deviceAccessAdminList");
+  if (!container || !adminUnlocked || !db) return;
+  try {
+    const [requestsSnapshot, accessSnapshot, eventsSnapshot] = await Promise.all([
+      db.ref("pairingRequests").once("value"),
+      db.ref("deviceAccess").once("value"),
+      db.ref("events").once("value")
+    ]);
+    const requests = requestsSnapshot.val() || {};
+    const accesses = accessSnapshot.val() || {};
+    const events = eventsSnapshot.val() || {};
+    const pending = Object.entries(requests).filter(([uid, request]) => request && request.status === "pending" && !accesses[uid]);
+    const expiryDefault = localDateTimeInputValue(Date.now() + 4 * 60 * 60 * 1000);
+    const pendingHtml = pending.map(([uid, request]) => `<div class="device-access-row">
+      <div class="device-access-head"><div><div class="device-access-code">${escapeHtml(request.code || "------")}</div><div class="device-access-meta">Neue Anfrage · ${escapeHtml(new Date(Number(request.createdAt || Date.now())).toLocaleString("de-DE"))}<br>Gerätekennung …${escapeHtml(uid.slice(-6))}</div></div><span class="badge badge-info">Wartet</span></div>
+      <div class="device-access-expiry"><div class="input-group" style="margin:0;"><label class="input-label">Bezeichnung</label><input class="input" id="deviceLabel_${uid}" value="Stand ${escapeHtml(request.code || uid.slice(-4))}"></div><div class="input-group" style="margin:0;"><label class="input-label">Freigabe bis</label><input class="input" type="datetime-local" id="deviceExpiry_${uid}" value="${expiryDefault}"></div></div>
+      <div class="device-access-actions"><button class="btn btn-success btn-sm" onclick="approveStandDevice('${uid}')">Für diese Veranstaltung freigeben</button><button class="btn btn-secondary btn-sm" onclick="removeStandDevice('${uid}')">Anfrage entfernen</button></div>
+    </div>`).join("");
+    const accessHtml = Object.entries(accesses).sort((a,b) => Number(b[1].approvedAt || 0) - Number(a[1].approvedAt || 0)).map(([uid, access]) => {
+      const active = temporaryAccessIsValid(access);
+      const expired = Number(access.expiresAt || 0) <= Date.now();
+      const eventName = events[access.eventId] && events[access.eventId].meta ? events[access.eventId].meta.name : access.eventId;
+      const code = requests[uid] && requests[uid].code ? requests[uid].code : "…" + uid.slice(-6);
+      const status = active ? '<span class="badge badge-success">Aktiv</span>' : expired ? '<span class="badge badge-danger">Abgelaufen</span>' : '<span class="badge badge-danger">Gesperrt</span>';
+      return `<div class="device-access-row"><div class="device-access-head"><div><strong>${escapeHtml(access.label || "Standgerät")}</strong><div class="device-access-meta">Code ${escapeHtml(code)} · Gerät …${escapeHtml(uid.slice(-6))}<br>${escapeHtml(eventName || "Veranstaltung")}<br>Freigabe bis ${escapeHtml(new Date(Number(access.expiresAt || 0)).toLocaleString("de-DE"))}</div></div>${status}</div><div class="device-access-actions">${active ? `<button class="btn btn-danger btn-sm" onclick="revokeStandDevice('${uid}')">Sofort sperren</button>` : `<button class="btn btn-secondary btn-sm" onclick="removeStandDevice('${uid}')">Eintrag entfernen</button>`}</div></div>`;
+    }).join("");
+    container.innerHTML = (pendingHtml ? `<div style="margin-bottom:9px;font-weight:750;">Offene Freigaben</div>${pendingHtml}` : "") + (accessHtml ? `<div style="margin:16px 0 9px;font-weight:750;">Bekannte Standgeräte</div>${accessHtml}` : "") || '<p style="color:var(--text2);font-size:13px;">Derzeit gibt es keine privaten Standgeräte oder offenen Freigaben.</p>';
+  } catch (error) {
+    console.error(error);
+    container.innerHTML = '<p style="color:var(--danger);font-size:13px;">Geräteliste konnte nicht geladen werden. Bitte Firebase-Regeln prüfen.</p>';
+  }
+}
+
+async function approveStandDevice(uid) {
+  if (!ensureAdminAccess() || !ensureFirebaseReady()) return;
+  if (!activeEventId || activeEventMeta.status === "closed" || cashState.closedAt) { showToast("Bitte zuerst eine aktive Veranstaltung auswählen", "error"); return; }
+  const labelInput = document.getElementById("deviceLabel_" + uid);
+  const expiryInput = document.getElementById("deviceExpiry_" + uid);
+  const label = labelInput ? labelInput.value.trim() : "Standgerät";
+  const expiresAt = expiryInput ? new Date(expiryInput.value).getTime() : NaN;
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() + 5 * 60 * 1000) { showToast("Die Freigabe muss mindestens fünf Minuten in der Zukunft enden", "error"); return; }
+  const now = Date.now();
+  const access = { active:true, role:"stand", eventId:activeEventId, label:label || "Standgerät", approvedAt:now, approvedBy:auth.currentUser.uid, expiresAt };
+  const updates = {};
+  updates["deviceAccess/" + uid] = access;
+  updates["pairingRequests/" + uid + "/status"] = "approved";
+  updates["pairingRequests/" + uid + "/approvedAt"] = now;
+  await db.ref().update(updates);
+  showToast("Standgerät wurde freigegeben", "success");
+}
+
+async function revokeStandDevice(uid) {
+  if (!ensureAdminAccess() || !ensureFirebaseReady()) return;
+  const updates = {};
+  updates["deviceAccess/" + uid + "/active"] = false;
+  updates["deviceAccess/" + uid + "/revokedAt"] = Date.now();
+  updates["deviceAccess/" + uid + "/revokedBy"] = auth.currentUser.uid;
+  await db.ref().update(updates);
+  showToast("Standgerät wurde sofort gesperrt", "success");
+}
+
+async function removeStandDevice(uid) {
+  if (!ensureAdminAccess() || !ensureFirebaseReady()) return;
+  const accessSnapshot = await db.ref("deviceAccess/" + uid).once("value");
+  const access = accessSnapshot.val();
+  if (temporaryAccessIsValid(access)) { showToast("Ein aktives Gerät muss zuerst gesperrt werden", "error"); return; }
+  const updates = {};
+  updates["deviceAccess/" + uid] = null;
+  updates["pairingRequests/" + uid] = null;
+  await db.ref().update(updates);
+  showToast("Geräteeintrag wurde entfernt", "success");
+}
+
 async function renderAdmin() {
   if (!adminUnlocked || mode !== "kasse" || !activeEventId) return;
   const info = document.getElementById("activeEventAdminInfo");
@@ -3337,6 +3721,7 @@ async function renderAdmin() {
     return `<div class="order-item"><div><strong>${escapeHtml(meta.name || id)}</strong><br><span style="font-size:11px;color:var(--text2);">${escapeHtml(meta.date || "Ohne Datum")}</span><br>${statusBadge}</div><div style="max-width:190px;text-align:right;">${action}</div></div>`;
   }).join("");
   document.getElementById("eventArchiveList").innerHTML = rows || '<p style="color:var(--text2);">Noch keine Veranstaltungen.</p>';
+  renderDeviceAccessAdmin();
 }
 
 function renderAdminProducts() {
