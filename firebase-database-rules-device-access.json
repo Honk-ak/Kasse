@@ -1,0 +1,82 @@
+{
+  "rules": {
+    "adminAccess": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "defaultEventId": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)"
+    },
+    "activeEventId": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)"
+    },
+    "cards": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)"
+    },
+    "transactions": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)"
+    },
+    "cashState": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)"
+    },
+
+    "pairingRequests": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".indexOn": ["code", "createdAt", "status"],
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && ((!data.exists() && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending') || !newData.exists())",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid', 'code', 'status', 'createdAt']) && newData.child('uid').val() === $uid && newData.child('code').isString() && newData.child('code').val().matches(/^[0-9]{6}$/) && (newData.child('status').val() === 'pending' || newData.child('status').val() === 'approved'))"
+      }
+    },
+
+    "deviceAccess": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.hasChildren(['active', 'role', 'eventId', 'expiresAt']) && newData.child('active').isBoolean() && newData.child('role').val() === 'stand' && newData.child('eventId').isString() && newData.child('expiresAt').isNumber())",
+        "active": {
+          ".write": "auth != null && auth.uid === $uid && data.val() === true && newData.val() === false"
+        }
+      }
+    },
+
+    "events": {
+      ".read": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      ".write": "auth != null && (auth.uid === 'kmz65fKRzUenfd6M2FUYjU3XgoS2' || root.child('adminAccess').child(auth.uid).child('active').val() === true)",
+      "$eventId": {
+        "meta": {
+          ".read": "auth != null && root.child('deviceAccess').child(auth.uid).child('active').val() === true && root.child('deviceAccess').child(auth.uid).child('role').val() === 'stand' && root.child('deviceAccess').child(auth.uid).child('eventId').val() === $eventId && root.child('deviceAccess').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "products": {
+          ".read": "auth != null && root.child('deviceAccess').child(auth.uid).child('active').val() === true && root.child('deviceAccess').child(auth.uid).child('role').val() === 'stand' && root.child('deviceAccess').child(auth.uid).child('eventId').val() === $eventId && root.child('deviceAccess').child(auth.uid).child('expiresAt').val() > now"
+        },
+        "transactions": {
+          ".read": "auth != null && root.child('deviceAccess').child(auth.uid).child('active').val() === true && root.child('deviceAccess').child(auth.uid).child('role').val() === 'stand' && root.child('deviceAccess').child(auth.uid).child('eventId').val() === $eventId && root.child('deviceAccess').child(auth.uid).child('expiresAt').val() > now",
+          ".indexOn": ["tid", "timestamp"],
+          "$transactionId": {
+            ".write": "auth != null && !data.exists() && root.child('deviceAccess').child(auth.uid).child('active').val() === true && root.child('deviceAccess').child(auth.uid).child('role').val() === 'stand' && root.child('deviceAccess').child(auth.uid).child('eventId').val() === $eventId && root.child('deviceAccess').child(auth.uid).child('expiresAt').val() > now && (newData.child('type').val() === 'purchase' || newData.child('type').val() === 'correction') && newData.child('actorUid').val() === auth.uid",
+            ".validate": "newData.hasChildren(['tid', 'type', 'amount', 'timestamp', 'actorUid']) && newData.child('tid').isString() && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && newData.child('timestamp').isNumber()"
+          }
+        },
+        "cards": {
+          ".read": "auth != null && root.child('deviceAccess').child(auth.uid).child('active').val() === true && root.child('deviceAccess').child(auth.uid).child('role').val() === 'stand' && root.child('deviceAccess').child(auth.uid).child('eventId').val() === $eventId && root.child('deviceAccess').child(auth.uid).child('expiresAt').val() > now",
+          "$tid": {
+            ".write": "auth != null && data.exists() && root.child('deviceAccess').child(auth.uid).child('active').val() === true && root.child('deviceAccess').child(auth.uid).child('role').val() === 'stand' && root.child('deviceAccess').child(auth.uid).child('eventId').val() === $eventId && root.child('deviceAccess').child(auth.uid).child('expiresAt').val() > now",
+            ".validate": "newData.hasChildren(['tid', 'initialCents', 'balanceCents', 'status', 'createdAt', 'updatedAt']) && newData.child('tid').val() === $tid && newData.child('balanceCents').isNumber() && newData.child('balanceCents').val() >= 0"
+          }
+        }
+      }
+    }
+  }
+}
