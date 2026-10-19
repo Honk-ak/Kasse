@@ -1,0 +1,33 @@
+{
+  "name": "SVF-BUDO Kassen-App",
+  "short_name": "Kassen-App",
+  "description": "Digitale Veranstaltungskasse des SVF-BUDO mit QR-Guthaben und Standverkauf.",
+  "lang": "de-DE",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f0f14",
+  "theme_color": "#b52f27",
+  "icons": [
+    {
+      "src": "kassen-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "kassen-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "kassen-app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

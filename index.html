@@ -4,10 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>SVF-BUDO Veranstaltungskasse</title>
+  <meta name="application-name" content="Kassen-App" />
+  <meta name="apple-mobile-web-app-title" content="Kassen-App" />
+  <meta name="description" content="Digitale Veranstaltungskasse des SVF-BUDO mit QR-Guthaben und Standverkauf." />
   <meta name="theme-color" content="#b52f27" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="kassen-app-icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="kassen-app-apple-touch-icon.png" />
 
   <!-- Firebase -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
@@ -4046,6 +4052,11 @@ function formatTime(ts) {
 window.onload = function() {
   buildProductGrid();
   renderCashManagement();
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js").catch(error => {
+      console.warn("Service Worker konnte nicht registriert werden:", error);
+    });
+  }
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && document.getElementById("helpOverlay").classList.contains("open")) closeHelpCenter();
   });
